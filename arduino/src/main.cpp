@@ -4,25 +4,22 @@
  * Hardware : 3x IR obstacle sensors + Linear actuator via L298N mini
  * Battery  : 7.4V 2200mAh LiPo (isolated from ESP32 system)
  *
- * Optimizations:
- *   - Hardware interrupts on D2, D3 (INT0, INT1) — ~1μs reaction
- *   - Pin Change Interrupt on D5 — faster than polling
- *   - AVR inline assembly actuator trigger — 3 clock cycles (187ns)
- *   - Startup IR calibration — dynamic threshold, not hardcoded
- *   - IR approach prediction — fires actuator before opponent arrives
- *   - Cooldown timer — prevents actuator jamming
- *
- * IR Logic:
- *   Center detected       → extend actuator (push/flip)
- *   Left + Right (no ctr) → extend (opponent wide, still engage)
- *   Nothing detected      → retract if extended
- *
- * Startup sequence:
- *   1. Boot → 5s wait (competition rule)
- *   2. Calibrate IR baseline
- *   3. Pre-extend wedge
- *   4. Fight
+ * ─── CONFIGURATION ───────────────────────────────────────────────────────────
+ * Edit the flags below before uploading.
+ * No need to touch anything else.
  */
+
+// Set to 1 to run component test on boot (tests actuator + prints IR readings)
+#define TEST_MODE           0
+
+// Set to 1 if your IR sensors output HIGH when obstacle detected
+// (most common sensors output LOW — leave 0 if unsure)
+#define IR_ACTIVE_HIGH      0
+
+// Set to 1 if actuator retracts when it should extend (swaps IN1/IN2 logic)
+#define INVERT_ACTUATOR     0
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 #include <Arduino.h>
 #include <avr/io.h>
@@ -30,12 +27,12 @@
 #include <math.h>
 
 // ─── Pin Definitions ─────────────────────────────────────────────────────────
-#define IR_LEFT     2    // Hardware INT0  — must be D2
-#define IR_CENTER   3    // Hardware INT1  — must be D3
-#define IR_RIGHT    5    // PCINT21 (Pin Change Group 2)
+#define IR_LEFT     2    // Hardware INT0  — must stay D2
+#define IR_CENTER   3    // Hardware INT1  — must stay D3
+#define IR_RIGHT    5    // PCINT21 — Pin Change Interrupt
 
-#define ACT_IN1     7    // Actuator extend  — PORTD bit 7
-#define ACT_IN2     8    // Actuator retract — PORTB bit 0
+#define ACT_IN1     7    // PORTD bit 7
+#define ACT_IN2     8    // PORTB bit 0
 
 // ─── Timing ──────────────────────────────────────────────────────────────────
 #define STARTUP_DELAY_MS    5000
@@ -43,10 +40,19 @@
 #define EXTEND_MS           600
 #define RETRACT_MS          600
 #define COOLDOWN_MS         2500
-#define LOOP_DELAY_MS       5     // 200Hz main loop
+#define LOOP_DELAY_MS       5
+
+// ─── IR Trigger Edge ─────────────────────────────────────────────────────────
+#if IR_ACTIVE_HIGH
+  #define IR_EDGE RISING
+  #define IR_DETECTED(pin) (digitalRead(pin) == HIGH)
+#else
+  #define IR_EDGE FALLING
+  #define IR_DETECTED(pin) (digitalRead(pin) == LOW)
+#endif
 
 // ─── Prediction ──────────────────────────────────────────────────────────────
-#define HISTORY_SIZE        5
+#define HISTORY_SIZE    5
 
 struct IRSample {
     bool     detected;
@@ -56,7 +62,7 @@ struct IRSample {
 static IRSample history[HISTORY_SIZE];
 static uint8_t  histIdx = 0;
 
-// ─── Volatile Flags (set in ISR, read in loop) ────────────────────────────────
+// ─── Volatile ISR Flags ───────────────────────────────────────────────────────
 volatile bool flagLeft   = false;
 volatile bool flagCenter = false;
 volatile bool flagRight  = false;
@@ -65,79 +71,85 @@ volatile bool flagRight  = false;
 static bool     extended    = false;
 static uint32_t lastTrigger = 0;
 
-// ─── AVR Assembly: Actuator Control ──────────────────────────────────────────
-// PORTD bit 7 = D7 (ACT_IN1)
-// PORTB bit 0 = D8 (ACT_IN2)
-// Each function executes in 2–3 AVR clock cycles = ~187ns at 16MHz
+// ─── AVR Assembly: Actuator Trigger ──────────────────────────────────────────
+// Executes in 2–3 clock cycles = ~187ns at 16MHz
+// D7 = PORTD bit 7 (ACT_IN1), D8 = PORTB bit 0 (ACT_IN2)
 
 static inline void __attribute__((always_inline)) asmExtend() {
+#if INVERT_ACTUATOR
     asm volatile (
-        "sbi %[pd], 7 \n\t"   // PORTD |= (1<<7) — D7 HIGH
-        "cbi %[pb], 0 \n\t"   // PORTB &= ~(1<<0) — D8 LOW
-        :
-        : [pd] "I" (_SFR_IO_ADDR(PORTD)),
-          [pb] "I" (_SFR_IO_ADDR(PORTB))
+        "cbi %[pd], 7 \n\t"
+        "sbi %[pb], 0 \n\t"
+        : : [pd] "I" (_SFR_IO_ADDR(PORTD)), [pb] "I" (_SFR_IO_ADDR(PORTB))
     );
+#else
+    asm volatile (
+        "sbi %[pd], 7 \n\t"
+        "cbi %[pb], 0 \n\t"
+        : : [pd] "I" (_SFR_IO_ADDR(PORTD)), [pb] "I" (_SFR_IO_ADDR(PORTB))
+    );
+#endif
 }
 
 static inline void __attribute__((always_inline)) asmRetract() {
+#if INVERT_ACTUATOR
     asm volatile (
-        "cbi %[pd], 7 \n\t"   // D7 LOW
-        "sbi %[pb], 0 \n\t"   // D8 HIGH
-        :
-        : [pd] "I" (_SFR_IO_ADDR(PORTD)),
-          [pb] "I" (_SFR_IO_ADDR(PORTB))
+        "sbi %[pd], 7 \n\t"
+        "cbi %[pb], 0 \n\t"
+        : : [pd] "I" (_SFR_IO_ADDR(PORTD)), [pb] "I" (_SFR_IO_ADDR(PORTB))
     );
+#else
+    asm volatile (
+        "cbi %[pd], 7 \n\t"
+        "sbi %[pb], 0 \n\t"
+        : : [pd] "I" (_SFR_IO_ADDR(PORTD)), [pb] "I" (_SFR_IO_ADDR(PORTB))
+    );
+#endif
 }
 
 static inline void __attribute__((always_inline)) asmStop() {
     asm volatile (
-        "cbi %[pd], 7 \n\t"   // D7 LOW
-        "cbi %[pb], 0 \n\t"   // D8 LOW
-        :
-        : [pd] "I" (_SFR_IO_ADDR(PORTD)),
-          [pb] "I" (_SFR_IO_ADDR(PORTB))
+        "cbi %[pd], 7 \n\t"
+        "cbi %[pb], 0 \n\t"
+        : : [pd] "I" (_SFR_IO_ADDR(PORTD)), [pb] "I" (_SFR_IO_ADDR(PORTB))
     );
 }
 
-// ─── Hardware ISRs ────────────────────────────────────────────────────────────
-ISR(INT0_vect) { flagLeft   = true; }
-ISR(INT1_vect) { flagCenter = true; }
+// ─── ISR Handlers (static — no lambdas, safe on AVR) ─────────────────────────
+static void isrLeft()   { flagLeft   = true; }
+static void isrCenter() { flagCenter = true; }
 
+// Pin Change ISR — detects falling edge on D5 only
 ISR(PCINT2_vect) {
-    // Only trigger on falling edge (LOW = detected)
-    if (!(PIND & (1 << PD5))) flagRight = true;
+    static uint8_t prev = 0xFF;
+    uint8_t curr = PIND;
+    // Falling edge on PD5 = D5 went LOW
+    if ((prev & (1 << PD5)) && !(curr & (1 << PD5))) {
+        flagRight = true;
+    }
+    prev = curr;
 }
 
 // ─── IR Calibration ──────────────────────────────────────────────────────────
-// Samples center IR 100x at rest → computes mean + 2σ as threshold
-// Returns dynamic threshold (1 = clear, 0 = detected for most IR modules)
 void calibrateIR() {
     float sum = 0, sumSq = 0;
     for (int i = 0; i < CALIBRATION_SAMPLES; i++) {
-        int v = digitalRead(IR_CENTER);
+        float v = (float)digitalRead(IR_CENTER);
         sum   += v;
         sumSq += v * v;
         delay(5);
     }
     float mean   = sum / CALIBRATION_SAMPLES;
     float stddev = sqrt((sumSq / CALIBRATION_SAMPLES) - (mean * mean));
-    Serial.print("[CAL] mean=");
-    Serial.print(mean, 3);
-    Serial.print(" stddev=");
-    Serial.print(stddev, 3);
-    Serial.print(" threshold=");
-    Serial.println(mean - 2.0f * stddev, 3);
-    // Threshold is informational — hardware interrupt handles actual detection
+    Serial.print("[CAL] mean="); Serial.print(mean, 3);
+    Serial.print(" stddev=");    Serial.print(stddev, 3);
+    Serial.print(" threshold="); Serial.println(mean - 2.0f * stddev, 3);
 }
 
 // ─── IR Approach Prediction ──────────────────────────────────────────────────
-// Looks at last HISTORY_SIZE readings, estimates approach speed
-// Returns ms to wait before firing (0 = fire immediately)
 int predictFire() {
     int detected = 0;
     uint32_t oldest = UINT32_MAX, newest = 0;
-
     for (int i = 0; i < HISTORY_SIZE; i++) {
         if (history[i].detected) {
             detected++;
@@ -145,13 +157,11 @@ int predictFire() {
             if (history[i].ts > newest) newest = history[i].ts;
         }
     }
-
-    if (detected < 2) return 0;   // Not enough data — fire now
-
+    if (detected < 2) return 0;
     uint32_t span = newest - oldest;
-    if (span < 150)  return 0;    // Very fast approach — fire immediately
-    if (span < 350)  return 30;   // Medium — small lead time
-    return 60;                     // Slow — larger lead time
+    if (span < 150) return 0;
+    if (span < 350) return 30;
+    return 60;
 }
 
 // ─── Actuator Operations ─────────────────────────────────────────────────────
@@ -172,53 +182,84 @@ void doRetract() {
     Serial.println("[ACT] Retracted");
 }
 
+// ─── Test Mode ───────────────────────────────────────────────────────────────
+#if TEST_MODE
+void runTestMode() {
+    Serial.println("[TEST] === ACTUATOR TEST ===");
+    Serial.println("[TEST] Extending...");
+    asmExtend(); delay(EXTEND_MS); asmStop();
+    delay(1000);
+    Serial.println("[TEST] Retracting...");
+    asmRetract(); delay(RETRACT_MS); asmStop();
+    delay(500);
+    Serial.println("[TEST] If actuator moved wrong direction, set INVERT_ACTUATOR=1");
+
+    Serial.println("[TEST] === IR SENSOR TEST (10 seconds) ===");
+    Serial.println("[TEST] Wave hand in front of each sensor to verify:");
+    unsigned long start = millis();
+    while (millis() - start < 10000) {
+        Serial.print("[TEST] L=");
+        Serial.print(IR_DETECTED(IR_LEFT)   ? "DETECT" : "clear ");
+        Serial.print("  C=");
+        Serial.print(IR_DETECTED(IR_CENTER) ? "DETECT" : "clear ");
+        Serial.print("  R=");
+        Serial.println(IR_DETECTED(IR_RIGHT)  ? "DETECT" : "clear ");
+        delay(200);
+    }
+    Serial.println("[TEST] Done. If sensors show wrong values, set IR_ACTIVE_HIGH=1");
+    Serial.println("[TEST] Entering fight mode...");
+}
+#endif
+
 // ─── Setup ───────────────────────────────────────────────────────────────────
 void setup() {
     Serial.begin(115200);
     Serial.println("[GHOST] Flipper system starting...");
 
-    // Actuator output pins
+    // Actuator pins
     pinMode(ACT_IN1, OUTPUT);
     pinMode(ACT_IN2, OUTPUT);
     asmStop();
 
-    // IR input pins
+    // IR sensor pins
     pinMode(IR_LEFT,   INPUT);
     pinMode(IR_CENTER, INPUT);
     pinMode(IR_RIGHT,  INPUT);
 
-    // Hardware interrupts: FALLING edge (IR output LOW = obstacle detected)
-    attachInterrupt(digitalPinToInterrupt(IR_LEFT),   []{ flagLeft   = true; }, FALLING);
-    attachInterrupt(digitalPinToInterrupt(IR_CENTER), []{ flagCenter = true; }, FALLING);
+    // Hardware interrupts with static handlers (no lambda — safe on AVR)
+    attachInterrupt(digitalPinToInterrupt(IR_LEFT),   isrLeft,   IR_EDGE);
+    attachInterrupt(digitalPinToInterrupt(IR_CENTER), isrCenter, IR_EDGE);
 
     // Pin Change Interrupt for D5 (PCINT21)
-    PCICR  |= (1 << PCIE2);          // Enable PCINT group 2
-    PCMSK2 |= (1 << PCINT21);        // Enable PCINT21 pin
+    PCICR  |= (1 << PCIE2);
+    PCMSK2 |= (1 << PCINT21);
     sei();
 
-    // Initialize history
-    for (int i = 0; i < HISTORY_SIZE; i++) {
-        history[i] = {false, 0};
-    }
+    // Initialize history buffer
+    for (int i = 0; i < HISTORY_SIZE; i++) history[i] = {false, 0};
 
-    // Competition startup delay
+#if TEST_MODE
+    runTestMode();
+#endif
+
+    // Competition: wait 5s for match start signal
     Serial.println("[GHOST] Waiting 5s for match start...");
     delay(STARTUP_DELAY_MS);
 
-    // IR calibration
-    Serial.println("[GHOST] Calibrating IR sensors...");
+    // Calibrate IR sensors against ambient conditions
+    Serial.println("[GHOST] Calibrating IR...");
     calibrateIR();
 
-    // Pre-extend wedge — sits low at ground level, ready to scoop
+    // Pre-extend wedge — sits at ground level ready to scoop
     Serial.println("[GHOST] Pre-extending wedge...");
     doExtend();
 
-    Serial.println("[GHOST] Flipper ready. Fighting!");
+    Serial.println("[GHOST] Fight!");
 }
 
 // ─── Main Loop ───────────────────────────────────────────────────────────────
 void loop() {
-    // Snapshot and clear interrupt flags atomically
+    // Read and clear flags atomically
     cli();
     bool left   = flagLeft;
     bool center = flagCenter;
@@ -226,26 +267,25 @@ void loop() {
     flagLeft = flagCenter = flagRight = false;
     sei();
 
-    // Update prediction history with center sensor
+    // Also poll current state (catches sustained detections between interrupts)
+    left   |= IR_DETECTED(IR_LEFT);
+    center |= IR_DETECTED(IR_CENTER);
+    right  |= IR_DETECTED(IR_RIGHT);
+
+    // Update prediction history
     history[histIdx % HISTORY_SIZE] = {center, millis()};
     histIdx++;
 
-    uint32_t now      = millis();
-    bool     cooldown = (now - lastTrigger) > COOLDOWN_MS;
+    bool cooldown = (millis() - lastTrigger) > COOLDOWN_MS;
 
     if (cooldown) {
         if (center || (left && right)) {
-            // Opponent confirmed in front — predict and fire
             int leadMs = predictFire();
             if (leadMs > 0) delay(leadMs);
             doExtend();
-
         } else if (left || right) {
-            // Opponent on one side only — still extend to catch
             doExtend();
-
         } else if (extended) {
-            // Nothing detected — retract and reset for next engagement
             doRetract();
         }
     }
