@@ -3,9 +3,8 @@
 ## System 1 — ESP32 Drive System
 
 ### Power
-- Battery 1 (7.4V LiPo) → L298N 12V pin + GND
+- Battery 1 + Battery 2 in **series = 14.8V** → L298N 12V pin + GND
 - L298N 5V output → ESP32 VIN (powers ESP32 from motor battery)
-- Do NOT connect both battery GNDs together (systems are isolated)
 
 ### L298N → ESP32
 ```
@@ -15,67 +14,117 @@ L298N IN2  →  ESP32 GPIO 26   (Left motor backward)
 L298N IN3  →  ESP32 GPIO 25   (Right motor forward)
 L298N IN4  →  ESP32 GPIO 33   (Right motor backward)
 L298N ENB  →  ESP32 GPIO 32   (Right motor PWM - LEDC channel 1)
-L298N GND  →  Battery 1 (-)  +  ESP32 GND
-L298N 12V  →  Battery 1 (+)
+L298N GND  →  Series battery (-) + ESP32 GND
+L298N 12V  →  Series battery (+) = 14.8V
 ```
 
 ### L298N → Motors
 ```
-L298N OUT1 + OUT2  →  Left motor (JGA25-370)
+L298N OUT1 + OUT2  →  Left motor  (JGA25-370)
 L298N OUT3 + OUT4  →  Right motor (JGA25-370)
 ```
 Note: If motors spin wrong direction, swap OUT1/OUT2 or OUT3/OUT4 wires.
+Or set INVERT_LEFT_MOTOR / INVERT_RIGHT_MOTOR in esp32/src/main.cpp.
 
 ---
 
 ## System 2 — Arduino R3 Flipper System
 
 ### Power
-- Battery 2 (7.4V LiPo) → Actuator L298N Mini 12V pin + GND
-- Actuator L298N Mini 5V output → Arduino R3 VIN
-- Systems share NO power or signal lines
+- 11.1V 3S LiPo (or buck converter output set to 12V) → L298N Mini [12V] + [GND]
+- L298N Mini [5V] output → Arduino R3 VIN
+- Arduino R3 powers IR sensor from its 5V pin
 
-### IR Sensors → Arduino R3
+### IR Sensor → Arduino R3
 ```
-IR Left   VCC  →  Arduino 5V
-IR Left   GND  →  Arduino GND
-IR Left   OUT  →  Arduino D2    (Hardware Interrupt INT0)
-
-IR Center VCC  →  Arduino 5V
-IR Center GND  →  Arduino GND
-IR Center OUT  →  Arduino D3    (Hardware Interrupt INT1)
-
-IR Right  VCC  →  Arduino 5V
-IR Right  GND  →  Arduino GND
-IR Right  OUT  →  Arduino D5    (Pin Change Interrupt PCINT21)
+IR Sensor VCC  →  Arduino 5V
+IR Sensor GND  →  Arduino GND
+IR Sensor OUT  →  Arduino D3   (Hardware Interrupt INT1)
 ```
-Note: IR sensors output LOW when obstacle detected, HIGH when clear.
-Adjust sensitivity potentiometer on each sensor to ~15cm detection range.
+- Only one IR sensor used
+- Sensor outputs LOW when obstacle detected (default)
+- If sensor outputs HIGH on detection → set IR_ACTIVE_HIGH 1 in code
+- Adjust potentiometer on sensor for ~15cm detection range
 
 ### L298N Mini → Arduino R3
 ```
-L298N IN1  →  Arduino D7   (Actuator extend)
-L298N IN2  →  Arduino D8   (Actuator retract)
-L298N GND  →  Arduino GND
-L298N 12V  →  Battery 2 (+)
+L298N Mini IN1  →  Arduino D7   (Actuator extend)
+L298N Mini IN2  →  Arduino D8   (Actuator retract)
+L298N Mini GND  →  Arduino GND + Power GND
+L298N Mini 12V  →  11.1V battery (+) or buck converter output
 ```
 
 ### L298N Mini → Linear Actuator
 ```
-L298N OUT1 + OUT2  →  Linear Actuator wires
+L298N Mini OUT1  →  Actuator wire 1
+L298N Mini OUT2  →  Actuator wire 2
 ```
-Note: If actuator extends when it should retract, swap the two wires.
+Note: If actuator extends when it should retract → set INVERT_ACTUATOR 1 in code.
+
+---
+
+## Full Wiring Diagram (Text)
+
+```
+┌─────────────────────────────────────────────────────┐
+│              SYSTEM 1 — DRIVE                        │
+│                                                      │
+│  [7.4V Bat1(+)]──[7.4V Bat2(-)]  ← Series = 14.8V  │
+│  [7.4V Bat1(-)]                  ← GND              │
+│  [7.4V Bat2(+)]                  ← 14.8V (+)        │
+│                                                      │
+│  14.8V (+) ──→ L298N [12V]                          │
+│  14.8V (-) ──→ L298N [GND] ──→ ESP32 GND            │
+│  L298N [5V] ──→ ESP32 VIN                           │
+│                                                      │
+│  ESP32 GPIO14 ──→ L298N ENA                         │
+│  ESP32 GPIO27 ──→ L298N IN1                         │
+│  ESP32 GPIO26 ──→ L298N IN2                         │
+│  ESP32 GPIO25 ──→ L298N IN3                         │
+│  ESP32 GPIO33 ──→ L298N IN4                         │
+│  ESP32 GPIO32 ──→ L298N ENB                         │
+│                                                      │
+│  L298N OUT1/OUT2 ──→ Left Motor                     │
+│  L298N OUT3/OUT4 ──→ Right Motor                    │
+└─────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────┐
+│              SYSTEM 2 — FLIPPER                      │
+│                                                      │
+│  11.1V battery (or buck 12V output)                 │
+│  (+) ──→ L298N Mini [12V]                           │
+│  (-) ──→ L298N Mini [GND] ──→ Arduino GND           │
+│  L298N Mini [5V] ──→ Arduino VIN                    │
+│                                                      │
+│  IR Sensor VCC ──→ Arduino 5V                       │
+│  IR Sensor GND ──→ Arduino GND                      │
+│  IR Sensor OUT ──→ Arduino D3                       │
+│                                                      │
+│  Arduino D7 ──→ L298N Mini IN1                      │
+│  Arduino D8 ──→ L298N Mini IN2                      │
+│                                                      │
+│  L298N Mini OUT1 ──→ Actuator wire 1                │
+│  L298N Mini OUT2 ──→ Actuator wire 2                │
+└─────────────────────────────────────────────────────┘
+
+NOTE: System 1 and System 2 share NO connections.
+      Completely isolated power and signal lines.
+```
 
 ---
 
 ## Important Notes
 
-1. **Never connect Battery 1 and Battery 2 GNDs** — systems must remain isolated to prevent ground loops and protect Arduino from ESP32 Bluetooth noise.
+1. **Systems are fully isolated** — no shared GND, no shared power, no signal wires between ESP32 and Arduino.
 
-2. **IR sensor orientation** — sensors must face forward, parallel to ground, at the height of the opponent robot (roughly center height ~30-40mm from ground).
+2. **Series battery wiring** — connect Battery 1 (+) to Battery 2 (-). Use Battery 1 (-) as GND and Battery 2 (+) as 14.8V positive.
 
-3. **Actuator current** — linear actuator draws up to 1A. L298N Mini can handle this (2A rated).
+3. **IR sensor orientation** — face forward at ~30–40mm height (center height of opponent robot). Adjust potentiometer for ~15cm range.
 
-4. **Motor current** — each JGA25-370 draws up to 0.5A running, 2A stall. L298N can handle 2A per channel. Do not stall motors for extended periods.
+4. **Actuator current** — draws ~1A when running. L298N Mini rated 2A — fine.
 
-5. **LiPo safety** — never discharge below 3.0V per cell (6.0V total for 2S). Monitor battery voltage during testing.
+5. **Motor current** — each JGA25-370 draws ~0.5A running, up to 2A stall. L298N rated 2A per channel — do not stall for extended time.
+
+6. **LiPo safety** — never discharge below 3.0V per cell:
+   - 2S (7.4V nominal) → stop at 6.0V
+   - 3S (11.1V nominal) → stop at 9.0V
