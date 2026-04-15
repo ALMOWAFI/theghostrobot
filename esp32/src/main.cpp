@@ -39,8 +39,8 @@
 
 // ─── Battery Monitor (only used if ENABLE_BATTERY_MONITOR = 1) ───────────────
 #define BATT_PIN        34
-#define BATT_FULL_V     7.4f
-#define BATT_EMPTY_V    6.0f
+#define BATT_FULL_V     14.8f
+#define BATT_EMPTY_V    12.0f
 #define BATT_DIVIDER    (147.0f / 47.0f)  // (R1+R2)/R2 with 100k/47k divider
 
 // ─── LEDC PWM ────────────────────────────────────────────────────────────────

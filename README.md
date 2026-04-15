@@ -34,7 +34,7 @@ The 3D-printed chassis is based on the open-source **Sumo Robot Combate** design
 | Flipper controller | Arduino R3 |
 | Flipper mechanism | Linear actuator 12V 60N 25mm stroke |
 | Wheel grip | SBR solid rubber self-adhesive strips |
-| Batteries | 2x 7.4V 2200mAh 50C LiPo |
+| Batteries | 2x 7.4V 2200mAh 50C LiPo (series = 14.8V for drive) + 11.1V 3S LiPo for flipper |
 | Wireless | Xbox controller via Bluetooth (Bluepad32) |
 
 ---
@@ -63,20 +63,19 @@ Left Motor    Right Motor
 
 ### System 2 — Flipper (Arduino R3)
 ```
-IR Sensor Left   IR Sensor Center   IR Sensor Right
-      \                 |                 /
-              Arduino R3
-                  |
-         L298N Mini Motor Driver
-                  |
-         Linear Actuator (wedge)
+IR Sensor (center)
+       |
+   Arduino R3
+       |
+L298N Mini Motor Driver
+       |
+Linear Actuator (wedge)
 ```
 - 100% autonomous — no connection to ESP32
-- Hardware interrupts on IR sensors (microsecond reaction time)
+- Hardware interrupt on IR sensor D3 (INT1) — ~1 microsecond reaction time
 - Pre-extends wedge at match start
-- Smart IR logic: tracks opponent direction, fires actuator on center detection
-- Auto-retracts after push with cooldown timer
-- AVR assembly ISR for sub-microsecond actuator trigger
+- Fires actuator on detection, auto-retracts after push with cooldown timer
+- AVR assembly actuator trigger (187ns at 16MHz)
 
 ---
 
@@ -92,22 +91,20 @@ IR Sensor Left   IR Sensor Center   IR Sensor Right
 | IN3 | GPIO 25 | Right motor direction A |
 | IN4 | GPIO 33 | Right motor direction B |
 | ENB | GPIO 32 | Right motor PWM |
-| 12V | Battery 1 (+) | Power |
-| GND | Battery 1 (-) + ESP32 GND | Ground |
+| 12V | Series battery (+) = 14.8V | Power |
+| GND | Series battery (-) + ESP32 GND | Ground |
 
-### System 2 — Arduino R3 + IR Sensors + Linear Actuator
+### System 2 — Arduino R3 + IR Sensor + Linear Actuator
 
 | Component | Arduino Pin | Function |
 |---|---|---|
-| IR Sensor Left | D2 | Hardware interrupt (INT0) |
-| IR Sensor Center | D3 | Hardware interrupt (INT1) |
-| IR Sensor Right | D5 | Pin Change Interrupt |
+| IR Sensor | D3 | Hardware interrupt (INT1) |
 | Actuator IN1 | D7 | Actuator extend |
 | Actuator IN2 | D8 | Actuator retract |
-| IR Sensors VCC | 5V | Power |
-| IR Sensors GND | GND | Ground |
-| Actuator Driver 12V | Battery 2 (+) | Power |
-| Actuator Driver GND | Battery 2 (-) + Arduino GND | Ground |
+| IR Sensor VCC | 5V | Power |
+| IR Sensor GND | GND | Ground |
+| Actuator Driver 12V | 11.1V 3S LiPo (+) | Power |
+| Actuator Driver GND | 11.1V 3S LiPo (-) + Arduino GND | Ground |
 
 ---
 
@@ -120,7 +117,7 @@ IR Sensor Left   IR Sensor Center   IR Sensor Right
 | Linear actuator | 12V 60N 15mm/s 25mm stroke | 1 |
 | Motor driver (drive) | L298N Dual H-Bridge | 1 |
 | Motor driver (actuator) | L298N Mini | 1 |
-| IR sensors | 3-wire obstacle avoidance | 3 |
+| IR sensor | 3-wire obstacle avoidance | 1 |
 | Batteries | 7.4V 2200mAh 50C LiPo | 2 |
 | Wheel grip | SBR solid rubber self-adhesive 1mm | 1 sheet |
 
@@ -153,17 +150,11 @@ IR Sensor Left   IR Sensor Center   IR Sensor Right
 6. **Tank drive mixing** — Left stick Y = forward/back, Right stick X = turning.
 
 #### Arduino R3
-1. **Hardware interrupts** — IR sensors on INT0 (D2) and INT1 (D3). Reaction time ~1 microsecond.
+1. **Hardware interrupt** — Single IR sensor on INT1 (D3). Reaction time ~1 microsecond.
 2. **AVR assembly ISR** — Actuator trigger written in AVR assembly. Executes in 3 clock cycles (187ns at 16MHz).
-3. **IR prediction** — Stores last 5 readings with timestamps. Calculates approach velocity. Fires actuator early.
-4. **Smart IR logic:**
-   - Left only → turn tracking (future use)
-   - Center detected → extend actuator
-   - All three → full extend + hold
-   - None → retract and wait
-5. **Startup sequence** — 5 second delay, then pre-extend actuator.
-6. **Cooldown timer** — 3 second cooldown between actuator triggers to prevent jamming.
-7. **Startup calibration** — Reads IR baseline 100 times on boot, sets dynamic threshold = baseline + 2σ.
+3. **IR logic** — Detection → extend actuator. No detection + extended → retract.
+4. **Startup sequence** — 5 second delay, then pre-extend actuator.
+5. **Cooldown timer** — 2.5 second cooldown between actuator triggers to prevent jamming.
 
 ### Priority Order (Both Systems)
 ```
