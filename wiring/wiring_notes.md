@@ -6,24 +6,26 @@
 - Battery 1 + Battery 2 in **series = 14.8V** → L298N 12V pin + GND
 - L298N 5V output → ESP32 VIN (powers ESP32 from motor battery)
 
-### L298N → ESP32
+### TB6612FNG → ESP32
 ```
-L298N ENA  →  ESP32 GPIO 14   (Left motor PWM - LEDC channel 0)
-L298N IN1  →  ESP32 GPIO 27   (Left motor forward)
-L298N IN2  →  ESP32 GPIO 26   (Left motor backward)
-L298N IN3  →  ESP32 GPIO 25   (Right motor forward)
-L298N IN4  →  ESP32 GPIO 33   (Right motor backward)
-L298N ENB  →  ESP32 GPIO 32   (Right motor PWM - LEDC channel 1)
-L298N GND  →  Series battery (-) + ESP32 GND
-L298N 12V  →  Series battery (+) = 14.8V
+TB6612 PWMA  →  ESP32 GPIO 14   (Left motor PWM - LEDC channel 0)
+TB6612 AIN1  →  ESP32 GPIO 27   (Left motor forward)
+TB6612 AIN2  →  ESP32 GPIO 26   (Left motor backward)
+TB6612 BIN1  →  ESP32 GPIO 25   (Right motor forward)
+TB6612 BIN2  →  ESP32 GPIO 33   (Right motor backward)
+TB6612 PWMB  →  ESP32 GPIO 32   (Right motor PWM - LEDC channel 1)
+TB6612 STBY  →  ESP32 GPIO 12   (Standby — must be HIGH to enable motors)
+TB6612 VCC   →  ESP32 3.3V      (Logic power)
+TB6612 GND   →  Series battery (-) + ESP32 GND
+TB6612 VM    →  Series battery (+) = 14.8V (Motor power)
 ```
 
-### L298N → Motors
+### TB6612FNG → Motors
 ```
-L298N OUT1 + OUT2  →  Left motor  (JGA25-370)
-L298N OUT3 + OUT4  →  Right motor (JGA25-370)
+TB6612 AO1 + AO2  →  Left motor  (25GA-370)
+TB6612 BO1 + BO2  →  Right motor (25GA-370)
 ```
-Note: If motors spin wrong direction, swap OUT1/OUT2 or OUT3/OUT4 wires.
+Note: If motors spin wrong direction, swap AO1/AO2 or BO1/BO2 wires.
 Or set INVERT_LEFT_MOTOR / INVERT_RIGHT_MOTOR in esp32/src/main.cpp.
 
 ---
@@ -73,19 +75,20 @@ Note: If actuator extends when it should retract → set INVERT_ACTUATOR 1 in co
 │  [7.4V Bat1(-)]                  ← GND              │
 │  [7.4V Bat2(+)]                  ← 14.8V (+)        │
 │                                                      │
-│  14.8V (+) ──→ L298N [12V]                          │
-│  14.8V (-) ──→ L298N [GND] ──→ ESP32 GND            │
-│  L298N [5V] ──→ ESP32 VIN                           │
+│  14.8V (+) ──→ TB6612 VM                            │
+│  14.8V (-) ──→ TB6612 GND ──→ ESP32 GND             │
+│  ESP32 3.3V ──→ TB6612 VCC                          │
+│  ESP32 GPIO12 ──→ TB6612 STBY (HIGH = enabled)      │
 │                                                      │
-│  ESP32 GPIO14 ──→ L298N ENA                         │
-│  ESP32 GPIO27 ──→ L298N IN1                         │
-│  ESP32 GPIO26 ──→ L298N IN2                         │
-│  ESP32 GPIO25 ──→ L298N IN3                         │
-│  ESP32 GPIO33 ──→ L298N IN4                         │
-│  ESP32 GPIO32 ──→ L298N ENB                         │
+│  ESP32 GPIO14 ──→ TB6612 PWMA                       │
+│  ESP32 GPIO27 ──→ TB6612 AIN1                       │
+│  ESP32 GPIO26 ──→ TB6612 AIN2                       │
+│  ESP32 GPIO25 ──→ TB6612 BIN1                       │
+│  ESP32 GPIO33 ──→ TB6612 BIN2                       │
+│  ESP32 GPIO32 ──→ TB6612 PWMB                       │
 │                                                      │
-│  L298N OUT1/OUT2 ──→ Left Motor                     │
-│  L298N OUT3/OUT4 ──→ Right Motor                    │
+│  TB6612 AO1/AO2 ──→ Left Motor                     │
+│  TB6612 BO1/BO2 ──→ Right Motor                    │
 └─────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────┐

@@ -29,7 +29,7 @@ The 3D-printed chassis is based on the open-source **Sumo Robot Combate** design
 | Total estimated weight | ~838g |
 | Size | 20x20cm |
 | Drive motors | 2x 25GA-370 12V 100RPM (~133RPM at 14.8V) |
-| Motor driver | L298N Dual H-Bridge |
+| Motor driver | TB6612FNG Dual H-Bridge |
 | Main controller | ESP32 (Bluetooth) |
 | Flipper controller | Arduino R3 |
 | Flipper mechanism | Linear actuator 12V 60N 25mm stroke |
@@ -83,15 +83,17 @@ Linear Actuator (wedge)
 
 ### System 1 — ESP32 + L298N + Motors
 
-| L298N Pin | ESP32 GPIO | Function |
+| TB6612FNG Pin | ESP32 GPIO | Function |
 |---|---|---|
-| ENA | GPIO 14 | Left motor PWM |
-| IN1 | GPIO 27 | Left motor direction A |
-| IN2 | GPIO 26 | Left motor direction B |
-| IN3 | GPIO 25 | Right motor direction A |
-| IN4 | GPIO 33 | Right motor direction B |
-| ENB | GPIO 32 | Right motor PWM |
-| 12V | Series battery (+) = 14.8V | Power |
+| PWMA | GPIO 14 | Left motor PWM |
+| AIN1 | GPIO 27 | Left motor direction A |
+| AIN2 | GPIO 26 | Left motor direction B |
+| BIN1 | GPIO 25 | Right motor direction A |
+| BIN2 | GPIO 33 | Right motor direction B |
+| PWMB | GPIO 32 | Right motor PWM |
+| STBY | GPIO 12 | Standby (must be HIGH) |
+| VM | Series battery (+) = 14.8V | Motor power |
+| VCC | ESP32 3.3V | Logic power |
 | GND | Series battery (-) + ESP32 GND | Ground |
 
 ### System 2 — Arduino R3 + IR Sensor + Linear Actuator

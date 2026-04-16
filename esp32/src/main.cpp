@@ -2,7 +2,7 @@
  * THE GHOST ROBOT — ESP32 Drive System
  * ─────────────────────────────────────
  * Controller : Xbox via Bluetooth (Bluepad32)
- * Hardware   : L298N + 2x 25GA-370 12V 100RPM
+ * Hardware   : TB6612FNG + 2x 25GA-370 12V 100RPM
  * Battery    : 7.4V 2200mAh LiPo
  *
  * ─── CONFIGURATION ───────────────────────────────────────────────────────────
@@ -29,13 +29,14 @@
 #include <Arduino.h>
 #include <Bluepad32.h>
 
-// ─── Motor Driver Pins ───────────────────────────────────────────────────────
-#define ENA_PIN     14    // Left motor PWM  — LEDC channel 0
-#define IN1_PIN     27    // Left motor forward
-#define IN2_PIN     26    // Left motor backward
-#define IN3_PIN     25    // Right motor forward
-#define IN4_PIN     33    // Right motor backward
-#define ENB_PIN     32    // Right motor PWM  — LEDC channel 1
+// ─── Motor Driver Pins (TB6612FNG) ───────────────────────────────────────────
+#define ENA_PIN     14    // PWMA — Left motor PWM   — LEDC channel 0
+#define IN1_PIN     27    // AIN1 — Left motor forward
+#define IN2_PIN     26    // AIN2 — Left motor backward
+#define IN3_PIN     25    // BIN1 — Right motor forward
+#define IN4_PIN     33    // BIN2 — Right motor backward
+#define ENB_PIN     32    // PWMB — Right motor PWM  — LEDC channel 1
+#define STBY_PIN    12    // STBY — must be HIGH to enable motors
 
 // ─── Battery Monitor (only used if ENABLE_BATTERY_MONITOR = 1) ───────────────
 #define BATT_PIN        34
@@ -44,7 +45,7 @@
 #define BATT_DIVIDER    (147.0f / 47.0f)  // (R1+R2)/R2 with 100k/47k divider
 
 // ─── LEDC PWM ────────────────────────────────────────────────────────────────
-#define PWM_FREQ        20000   // 20kHz — optimal for L298N + 25GA-370
+#define PWM_FREQ        20000   // 20kHz — optimal for TB6612FNG + 25GA-370
 #define PWM_RES         8       // 8-bit (0–255)
 #define LEDC_CH_L       0
 #define LEDC_CH_R       1
@@ -214,6 +215,7 @@ void setup() {
 
     pinMode(IN1_PIN, OUTPUT); pinMode(IN2_PIN, OUTPUT);
     pinMode(IN3_PIN, OUTPUT); pinMode(IN4_PIN, OUTPUT);
+    pinMode(STBY_PIN, OUTPUT); digitalWrite(STBY_PIN, HIGH);  // Enable TB6612FNG
 
     setupLEDC(LEDC_CH_L, PWM_FREQ, PWM_RES, ENA_PIN);
     setupLEDC(LEDC_CH_R, PWM_FREQ, PWM_RES, ENB_PIN);
