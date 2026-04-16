@@ -1,170 +1,197 @@
 // ═══════════════════════════════════════════════════════════════════
-//  THE GHOST ROBOT — Flipper Arm
-//  ─────────────────────────────
-//  Pivot-lever wedge flipper for 25mm linear actuator
+//  THE GHOST ROBOT — Flipper Arm  (v2)
+//  ─────────────────────────────────────
+//  Pivot-lever wedge for 25mm stroke linear actuator
 //
-//  HOW IT WORKS:
-//    1. Pivot bolt runs through the ears → fixed to chassis side walls
-//    2. Arm rests with tip at ground level (~2mm clearance)
-//    3. Actuator rod connects through the rear hole (bolt in Y direction)
-//    4. Actuator extends → pushes rear section → tip rises → flips opponent
+//  MECHANISM:
+//    • Pivot bolt fixed to chassis side walls (M5)
+//    • Tip rests 0.5mm off ground — scoops under any opponent
+//    • Actuator clevis connects at rear of arm (below pivot axis)
+//    • Actuator extends → rear pushed → tip rises ~50mm
+//    • Pivot at 2/3 arm length = max mechanical advantage
 //
-//  Side view:
+//  SIDE VIEW (at rest):
 //
-//    [chassis front]
-//         |
-//    ─────●──────────────────── tip  ← resting position (wedge low)
-//    pivot↑
-//         |
-//    ACT══● ← actuator pushes here (below pivot on rear section)
+//      [chassis]──────────────────────────────────
+//            ●  ← pivot bolt (M5, through ears)
+//             ╲
+//              ╲  arm
+//               ╲
+//        ACT═════●  ← clevis slot (actuator rod end)
+//                 ╲
+//      ─────────────╲__ tip (0.5mm from ground)
 //
-//    When ACT extends:
-//    tip ╱╱╱╱  ← rises up ~50mm from 25mm actuator stroke
+//  SIDE VIEW (triggered):
+//
+//      [chassis]
+//            ●
+//           ╱
+//          ╱  arm rises
+//         ╱
+//   ACT→→●  (pushed forward by actuator)
 //
 //  PRINT SETTINGS:
 //    Material   : PETG
 //    Layer      : 0.2mm
 //    Infill     : 40% gyroid
 //    Perimeters : 4
-//    Orientation: flat (bottom face down, no supports needed)
+//    Supports   : None needed (print flat, bottom face down)
 //
 //  HARDWARE:
-//    Pivot  : M5 bolt × 2 + M5 nuts (through chassis side walls + ears)
-//    Actuator: M5 bolt through rear hole → actuator rod end clevis
+//    Pivot  : M5 × 40mm bolt + M5 nyloc nut (through chassis walls + ears)
+//    Actuator: M5 × 20mm bolt through clevis slot → actuator rod clevis end
+//
+//  PREVIEW ANIMATION:
+//    In OpenSCAD → View → Animate
+//    Set FPS=10, Steps=50 to see the flip motion
 // ═══════════════════════════════════════════════════════════════════
 
-// ─── Parameters — adjust these to fit your robot ─────────────────
+// ─── Parameters ──────────────────────────────────────────────────
+TOTAL_LEN   = 160;   // mm — total arm length (tip to rear)
+PIVOT_FRAC  = 0.67;  // pivot at 2/3 from tip = max leverage (do not change)
 
-ARM_FWD     = 110;   // mm — pivot to tip (forward arm length)
-ARM_REAR    = 50;    // mm — pivot to back (lever arm for actuator)
-ARM_WIDTH   = 178;   // mm — full arm width (fits inside 200mm robot)
+ARM_WIDTH   = 178;   // mm — arm width (fits 200mm robot with 1mm clearance each side)
+THICK_ROOT  = 13;    // mm — arm thickness at pivot and rear (structural zone)
+THICK_TIP   = 0.5;   // mm — wedge tip thickness (0.5mm = scoops under any opponent)
 
-THICK_ROOT  = 12;    // mm — arm thickness at pivot + rear (structural)
-THICK_TIP   = 2;     // mm — wedge tip thickness (gets under opponent)
+EAR_DEPTH   = 10;    // mm — ear extension beyond arm width (bolt clearance)
+EAR_LEN     = 24;    // mm — ear length along arm axis
 
-EAR_DEPTH   = 10;    // mm — how far each ear extends beyond arm edge
-EAR_LENGTH  = 22;    // mm — ear length along X axis (around pivot)
+PIVOT_D     = 5.4;   // mm — M5 pivot bolt hole
+CLEVIS_W    = 6.0;   // mm — clevis slot width (actuator rod end pin diameter + 0.5mm)
+CLEVIS_H    = 12;    // mm — clevis slot height (allows actuator angle change during rotation)
+CLEVIS_WALL = 4;     // mm — wall thickness around clevis slot
 
-PIVOT_D     = 5.4;   // mm — pivot bolt hole (M5 clearance = 5.4mm)
-ACT_D       = 5.4;   // mm — actuator bolt hole (M5 clearance)
-
-// Actuator hole position within rear section
-// X: how far from rear end (0 = at rear, 1 = at pivot)
-// Z: height fraction of arm thickness (0 = bottom, 1 = top)
-ACT_X_FRAC  = 0.5;   // 50% into rear section
-ACT_Z_FRAC  = 0.35;  // 35% height = lower portion (below pivot center)
-
-RIB_H       = 9;     // mm — rib height above arm top face
+RIB_H       = 10;    // mm — rib height above arm top surface
 RIB_T       = 3;     // mm — rib thickness
 
-// ─────────────────────────────────────────────────────────────────
+// Actuator stroke (for animation)
+ACT_STROKE  = 25;    // mm — linear actuator stroke
+
+// ─── Computed values ─────────────────────────────────────────────
 $fn = 60;
 
-// Computed positions
-PIVOT_X  = ARM_FWD;
-REAR_END = ARM_FWD + ARM_REAR;
-ACT_X    = ARM_FWD + ARM_REAR * ACT_X_FRAC;
-ACT_Z    = THICK_ROOT * ACT_Z_FRAC;
+PIVOT_X     = TOTAL_LEN * PIVOT_FRAC;  // mm from tip to pivot
+ARM_REAR    = TOTAL_LEN - PIVOT_X;     // mm from pivot to rear
 
-// ─── Main arm body ────────────────────────────────────────────────
-// Bottom face is flat at Z=0 (rests on ground when retracted)
-// Top face tapers: full thickness at pivot/rear, thin at tip
+// Actuator clevis at 75% into rear section (away from pivot for more torque)
+CLEVIS_X    = PIVOT_X + ARM_REAR * 0.75;
+CLEVIS_Z    = THICK_ROOT * 0.5;        // mid-height of rear section
+
+// Animation: rotate arm around pivot using $t
+FLIP_ANGLE  = 55;   // degrees max flip angle
+anim_angle  = $t * FLIP_ANGLE;
+
+echo("=== FLIPPER ARM ===");
+echo(str("Total length  : ", TOTAL_LEN, " mm"));
+echo(str("Pivot position: ", PIVOT_X,   " mm from tip  (", PIVOT_FRAC*100, "%)"));
+echo(str("Rear section  : ", ARM_REAR,  " mm"));
+echo(str("Arm width     : ", ARM_WIDTH, " mm"));
+echo(str("Tip thickness : ", THICK_TIP, " mm"));
+echo(str("Clevis X      : ", CLEVIS_X,  " mm from tip"));
+
+// ─── Modules ─────────────────────────────────────────────────────
+
+// Main wedge body
+// Bottom face flat (Z=0), top face tapers tip→root
 module arm_body() {
     hull() {
-        // Tip — thin wedge edge
+        // Tip — paper thin
         cube([1, ARM_WIDTH, THICK_TIP]);
-
         // At pivot — full thickness
         translate([PIVOT_X, 0, 0])
             cube([1, ARM_WIDTH, THICK_ROOT]);
-
-        // At rear end — full thickness
-        translate([REAR_END, 0, 0])
+        // At rear — full thickness
+        translate([TOTAL_LEN, 0, 0])
             cube([1, ARM_WIDTH, THICK_ROOT]);
     }
 }
 
-// ─── Pivot ears ───────────────────────────────────────────────────
-// Solid blocks extending beyond arm width on both sides
-// The pivot bolt passes through these + the arm body
+// Pivot ears — solid blocks extending beyond arm width
 module pivot_ears() {
-    // Left ear (Y < 0)
-    translate([PIVOT_X - EAR_LENGTH/2, -EAR_DEPTH, 0])
-        cube([EAR_LENGTH, EAR_DEPTH, THICK_ROOT]);
-
-    // Right ear (Y > ARM_WIDTH)
-    translate([PIVOT_X - EAR_LENGTH/2, ARM_WIDTH, 0])
-        cube([EAR_LENGTH, EAR_DEPTH, THICK_ROOT]);
+    for (side = [[-EAR_DEPTH, 0], [ARM_WIDTH, 0]]) {
+        translate([PIVOT_X - EAR_LEN/2, side[0], 0])
+            cube([EAR_LEN, EAR_DEPTH, THICK_ROOT]);
+    }
 }
 
-// ─── Reinforcing ribs ─────────────────────────────────────────────
-// Longitudinal ribs on the top face for stiffness
-// Tapers with the arm: low at tip, full height at pivot and rear
+// Clevis bracket — reinforced block around actuator connection point
+// Actuator rod end slides in and is pinned with M5 bolt through clevis slot
+module clevis_bracket() {
+    bw = ARM_WIDTH * 0.3;   // bracket width (centered on arm)
+    by = (ARM_WIDTH - bw) / 2;
+    bx = CLEVIS_X - CLEVIS_W/2 - CLEVIS_WALL;
+    blen = CLEVIS_W + CLEVIS_WALL * 2;
+
+    translate([bx, by, 0])
+        cube([blen, bw, THICK_ROOT + CLEVIS_H/2]);
+}
+
+// Clevis slot — elongated hole for actuator rod pin
+// Slot is taller than wide to allow angle change as arm rotates
+module clevis_cut() {
+    bw = ARM_WIDTH * 0.3;
+    by = (ARM_WIDTH - bw) / 2;
+
+    translate([CLEVIS_X, by - 1, CLEVIS_Z])
+        rotate([-90, 0, 0])
+            hull() {
+                cylinder(d = CLEVIS_W, h = bw + 2);
+                translate([0, CLEVIS_H * 0.5, 0])
+                    cylinder(d = CLEVIS_W, h = bw + 2);
+                translate([0, -CLEVIS_H * 0.3, 0])
+                    cylinder(d = CLEVIS_W, h = bw + 2);
+            }
+}
+
+// Longitudinal ribs — stiffens the wide arm against flex
 module ribs() {
-    rib_ys = [ARM_WIDTH * 0.25, ARM_WIDTH * 0.5, ARM_WIDTH * 0.75];
+    rib_ys = [ARM_WIDTH * 0.2, ARM_WIDTH * 0.5, ARM_WIDTH * 0.8];
 
     for (y = rib_ys) {
         hull() {
-            // Near tip — very short rib starts here
-            translate([ARM_FWD * 0.25, y - RIB_T/2, THICK_TIP])
-                cube([1, RIB_T, RIB_H * 0.2]);
-
-            // At pivot — full rib height
+            translate([TOTAL_LEN * 0.15, y - RIB_T/2, THICK_TIP])
+                cube([1, RIB_T, 1]);
             translate([PIVOT_X, y - RIB_T/2, THICK_ROOT])
                 cube([1, RIB_T, RIB_H]);
-
-            // At rear — full rib height
-            translate([REAR_END, y - RIB_T/2, THICK_ROOT])
+            translate([TOTAL_LEN, y - RIB_T/2, THICK_ROOT])
                 cube([1, RIB_T, RIB_H]);
         }
     }
 }
 
-// ─── Wedge tip chamfer ────────────────────────────────────────────
-// Small 45° chamfer on the bottom front edge
-// Helps the arm slide under the opponent smoothly
+// Bottom front chamfer — helps tip slide under opponent
 module tip_chamfer() {
-    chamfer = THICK_TIP * 1.5;
+    c = THICK_ROOT * 0.8;
     translate([0, -1, 0])
-        rotate([0, 0, 0])
-            // Cut a triangular prism from the very front bottom edge
-            linear_extrude(height = ARM_WIDTH + 2)
-                polygon([[0, 0], [chamfer, 0], [0, chamfer]]);
+        linear_extrude(ARM_WIDTH + 2)
+            polygon([[0,0],[c,0],[0,c]]);
 }
 
-// ─── Final model ──────────────────────────────────────────────────
-difference() {
-    union() {
-        arm_body();
-        pivot_ears();
-        ribs();
+// ─── Static arm geometry ─────────────────────────────────────────
+module flipper_arm() {
+    difference() {
+        union() {
+            arm_body();
+            pivot_ears();
+            clevis_bracket();
+            ribs();
+        }
+        // Pivot hole — runs full width + ears
+        translate([PIVOT_X, -EAR_DEPTH - 1, THICK_ROOT / 2])
+            rotate([-90, 0, 0])
+                cylinder(d = PIVOT_D, h = ARM_WIDTH + EAR_DEPTH*2 + 2);
+        // Clevis slot
+        clevis_cut();
+        // Tip chamfer
+        tip_chamfer();
     }
-
-    // Pivot hole — through full arm width + both ears, at mid-thickness
-    translate([PIVOT_X, -EAR_DEPTH - 1, THICK_ROOT / 2])
-        rotate([-90, 0, 0])
-            cylinder(d = PIVOT_D, h = ARM_WIDTH + EAR_DEPTH * 2 + 2);
-
-    // Actuator hole — runs full width for flexible rod-end placement
-    translate([ACT_X, -1, ACT_Z])
-        rotate([-90, 0, 0])
-            cylinder(d = ACT_D, h = ARM_WIDTH + 2);
-
-    // Tip chamfer — bottom front edge
-    tip_chamfer();
 }
 
-// ─── Dimensions echo (visible in OpenSCAD console) ───────────────
-echo("=== FLIPPER ARM DIMENSIONS ===");
-echo(str("Width        : ", ARM_WIDTH, " mm"));
-echo(str("Fwd length   : ", ARM_FWD,   " mm  (pivot to tip)"));
-echo(str("Rear length  : ", ARM_REAR,  " mm  (pivot to actuator)"));
-echo(str("Total length : ", ARM_FWD + ARM_REAR, " mm"));
-echo(str("Tip thickness: ", THICK_TIP, " mm"));
-echo(str("Root thick   : ", THICK_ROOT," mm"));
-echo(str("Pivot hole X : ", PIVOT_X,   " mm from tip"));
-echo(str("Actuator X   : ", ACT_X,     " mm from tip"));
-echo(str("Actuator Z   : ", ACT_Z,     " mm from bottom"));
-echo("Pivot bolt  : M5");
-echo("Actuator bolt: M5");
-echo("Material    : PETG, 40% gyroid, 4 perimeters");
+// ─── ANIMATION — pivot around bolt axis ──────────────────────────
+// Rotate arm around pivot point to preview flip motion
+// In OpenSCAD: View → Animate, FPS=10, Steps=50
+translate([PIVOT_X, 0, THICK_ROOT/2])
+    rotate([0, -anim_angle, 0])
+        translate([-PIVOT_X, 0, -THICK_ROOT/2])
+            flipper_arm();
