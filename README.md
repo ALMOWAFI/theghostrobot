@@ -95,8 +95,8 @@ Motor Motor   Actuator
 
 | L298N Mini Pin | ESP32 GPIO | Function |
 |---|---|---|
-| IN1 | GPIO 16 | Actuator extend |
-| IN2 | GPIO 17 | Actuator retract |
+| IN3 | GPIO 16 | Actuator extend |
+| IN4 | GPIO 17 | Actuator retract |
 | 12V | Series battery (+) = 14.8V | Motor power (rated up to 35V) |
 | GND | ESP32 GND | Ground |
 

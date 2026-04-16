@@ -54,8 +54,8 @@ or set `INVERT_LEFT_MOTOR 1` / `INVERT_RIGHT_MOTOR 1` in code.
 ## ESP32 → L298N Mini (Linear Actuator)
 
 ```
-ESP32 GPIO16 ──→ L298N Mini IN1   (actuator extend)
-ESP32 GPIO17 ──→ L298N Mini IN2   (actuator retract)
+ESP32 GPIO16 ──→ L298N Mini IN3   (actuator extend)
+ESP32 GPIO17 ──→ L298N Mini IN4   (actuator retract)
 ESP32 GND    ──→ L298N Mini GND
 14.8V rail   ──→ L298N Mini 12V   (motor power — rated up to 35V)
 ```
@@ -95,8 +95,8 @@ If actuator direction is wrong → set `INVERT_ACTUATOR 1` in code.
 │  ESP32 GPIO33 ──→ TB6612 BIN2                            │
 │  ESP32 GPIO32 ──→ TB6612 PWMB                            │
 │                                                           │
-│  ESP32 GPIO16 ──→ L298N Mini IN1                            │
-│  ESP32 GPIO17 ──→ L298N Mini IN2                            │
+│  ESP32 GPIO16 ──→ L298N Mini IN3                            │
+│  ESP32 GPIO17 ──→ L298N Mini IN4                            │
 │                                                           │
 │  TB6612 AO1/AO2 ──→ Left Motor                          │
 │  TB6612 BO1/BO2 ──→ Right Motor                         │

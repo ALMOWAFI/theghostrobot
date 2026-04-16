@@ -56,9 +56,9 @@
 #define ENB_PIN     32    // PWMB — Right motor PWM  — LEDC channel 1
 #define STBY_PIN    13    // STBY — must be HIGH to enable motors (avoid GPIO12 strapping pin)
 
-// ─── Actuator Pins (L298N Mini) ──────────────────────────────────────────────
-#define ACT_IN1     16    // Actuator extend
-#define ACT_IN2     17    // Actuator retract
+// ─── Actuator Pins (L298N Mini — Channel B) ──────────────────────────────────
+#define ACT_IN1     16    // IN3 — Actuator extend
+#define ACT_IN2     17    // IN4 — Actuator retract
 
 // ─── Xbox Button Masks ───────────────────────────────────────────────────────
 #define BTN_Y       0x0008
