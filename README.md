@@ -4,7 +4,7 @@
 
 The Ghost Robot is a sumo combat robot built by a team from **Constructor University Bremen**, competing in the **Makers Club Sumo Bot Event** — an official university robotics competition with a **1kg weight limit** and **20x20cm size limit**.
 
-The robot is designed around a two-system architecture: a manual drive system controlled via Xbox controller, and a fully autonomous flipper system that detects opponents using IR sensors and fires a linear actuator wedge. The name "Ghost" reflects the robot's aggressive, fast, and unpredictable nature in the ring.
+The robot is controlled entirely via Xbox controller over Bluetooth. A single ESP32 handles both drive motors and the linear actuator flipper. The name "Ghost" reflects the robot's aggressive, fast, and unpredictable nature in the ring.
 
 The 3D-printed chassis is based on the open-source **Sumo Robot Combate** design from Cults3D, heavily modified with enlarged front holes to accommodate the flipper mechanism. All structural parts are printed in PETG for strength and heat resistance, while the wheels use SBR solid rubber grip strips for maximum traction on the sumo mat.
 
@@ -30,20 +30,31 @@ The 3D-printed chassis is based on the open-source **Sumo Robot Combate** design
 | Size | 20x20cm |
 | Drive motors | 2x 25GA-370 12V 100RPM (~133RPM at 14.8V) |
 | Motor driver | TB6612FNG Dual H-Bridge |
-| Main controller | ESP32 (Bluetooth) |
-| Flipper controller | ESP32 (same as drive) |
+| Actuator driver | MX1616H Dual H-Bridge |
+| Controller | ESP32 (Bluetooth) |
 | Flipper mechanism | Linear actuator 12V 60N 25mm stroke |
 | Wheel grip | SBR solid rubber self-adhesive strips |
-| Batteries | 2x 7.4V 2200mAh 50C LiPo (series = 14.8V for drive) + 11.1V 3S LiPo for flipper |
+| Batteries | 2x 7.4V 2200mAh 50C LiPo in series = 14.8V |
 | Wireless | Xbox controller via Bluetooth (Bluepad32) |
+
+---
+
+## Controls
+
+| Button | Action |
+|---|---|
+| Left stick Y | Forward / Backward |
+| Right stick X | Turn |
+| Y button | Turbo (instant full speed) |
+| R1 (hold) | Extend actuator |
+| L1 (hold) | Retract actuator |
 
 ---
 
 ## Architecture
 
-The robot runs on a single ESP32 system controlling both drive motors and linear actuator:
+Single ESP32 system — one controller for everything:
 
-### Single System — ESP32
 ```
 Xbox Controller (Bluetooth)
         |
@@ -54,20 +65,18 @@ TB6612FNG   MX1616H
 Left  Right   Linear
 Motor Motor   Actuator
 ```
-- 100% manual control via Xbox controller
-- FreeRTOS dual-core: Core 0 handles Bluetooth, Core 1 handles motors + actuator
+
+- FreeRTOS dual-core: Core 0 = Bluetooth, Core 1 = motors + actuator
 - 20kHz PWM via ESP32 LEDC hardware
 - Physics-based acceleration ramp (no wheel slip)
 - Battery voltage compensation (consistent speed through full match)
-- Y button → turbo (instant full speed)
-- R1 (hold) → extend actuator
-- L1 (hold) → retract actuator
+- Turbo mode bypasses ramp for instant full power
 
 ---
 
 ## Wiring
 
-### System 1 — ESP32 + L298N + Motors
+### ESP32 + TB6612FNG + Motors
 
 | TB6612FNG Pin | ESP32 GPIO | Function |
 |---|---|---|
@@ -100,18 +109,17 @@ Motor Motor   Actuator
 |---|---|---|
 | Drive motors | 25GA-370 12V 100RPM | 2 |
 | Linear actuator | 12V 60N 15mm/s 25mm stroke | 1 |
-| Motor driver (drive) | L298N Dual H-Bridge | 1 |
-| Motor driver (actuator) | L298N Mini | 1 |
-| IR sensor | 3-wire obstacle avoidance | 1 |
+| Motor driver (drive) | TB6612FNG Dual H-Bridge | 1 |
+| Motor driver (actuator) | MX1616H Dual H-Bridge | 1 |
 | Batteries | 7.4V 2200mAh 50C LiPo | 2 |
 | Wheel grip | SBR solid rubber self-adhesive 1mm | 1 sheet |
 
 ### Already Have
 | Component | Notes |
 |---|---|
-| ESP32 | Main drive controller |
-| Arduino R3 | Flipper controller |
+| ESP32 | Main controller |
 | Xbox controller | Drive input via Bluetooth |
+| Buck converter | Steps 14.8V down to 6V for MX1616H |
 | 3D printed chassis | Modified Sumo Robot Combate design |
 
 ---
@@ -120,31 +128,19 @@ Motor Motor   Actuator
 
 ### Tools
 - **IDE:** Cursor + PlatformIO extension
-- **Language:** C/C++ (Arduino framework) + AVR inline assembly (ISR only)
+- **Language:** C/C++ (Arduino framework)
 - **ESP32 framework:** Arduino Core with FreeRTOS
 - **Key library:** Bluepad32 (Xbox Bluetooth)
 
 ### Coding Advantages Implemented
 
-#### ESP32
-1. **FreeRTOS dual-core** — Bluetooth on Core 0, motor control on Core 1. Zero interference.
-2. **20kHz PWM (LEDC)** — Optimal switching frequency for L298N + JGA25-370. Less heat, more torque.
+1. **FreeRTOS dual-core** — Bluetooth on Core 0, motor+actuator on Core 1. Zero interference.
+2. **20kHz PWM (LEDC)** — Optimal switching frequency for TB6612FNG + 25GA-370. Less heat, more torque.
 3. **Physics-based acceleration ramp** — Based on μ=0.65 (SBR rubber), mass=838g. Max acceleration = 6.3 m/s². Prevents wheel slip.
 4. **Voltage compensation** — Reads battery level, scales PWM to maintain constant speed.
 5. **Turbo mode** — Xbox Y button bypasses ramp and goes to 100% PWM instantly.
 6. **Tank drive mixing** — Left stick Y = forward/back, Right stick X = turning.
-
-#### Actuator (ESP32)
-1. **R1 button (hold)** — extend actuator via MX1616H.
-2. **L1 button (hold)** — retract actuator via MX1616H.
-3. **Release** — actuator stops immediately.
-
-### Priority Order (Both Systems)
-```
-1. Startup sequence (5s delay)
-2. Calibration
-3. Normal operation loop
-```
+7. **Manual actuator** — R1 extends, L1 retracts, release stops immediately.
 
 ---
 
@@ -155,11 +151,7 @@ theghostrobot/
 ├── esp32/
 │   ├── platformio.ini
 │   └── src/
-│       └── main.cpp          # ESP32 drive code
-├── arduino/
-│   ├── platformio.ini
-│   └── src/
-│       └── main.cpp          # Arduino flipper code
+│       └── main.cpp          # ESP32 code (drive + actuator)
 ├── wiring/
 │   └── wiring_notes.md       # Detailed wiring reference
 └── README.md                 # This file
@@ -169,14 +161,11 @@ theghostrobot/
 
 ## TODO
 
-- [ ] Write ESP32 drive code (`esp32/src/main.cpp`)
-- [ ] Write Arduino flipper code (`arduino/src/main.cpp`)
-- [ ] Create PlatformIO configs (`platformio.ini` for both)
+- [x] Write ESP32 code
+- [x] Create PlatformIO config
 - [ ] Test motor driver wiring
-- [ ] Test IR sensor calibration
 - [ ] Test linear actuator extend/retract
 - [ ] Tune acceleration ramp values
-- [ ] Tune IR detection threshold
 - [ ] Full system integration test
 - [ ] Competition day tuning
 
