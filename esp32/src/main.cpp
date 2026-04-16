@@ -84,7 +84,7 @@
 #define RAMP_MS         2
 #define MAX_PWM         255                      // absolute ceiling (14.8V)
 #define NORMAL_MAX_PWM  206                      // 12V equivalent: (12/14.8)*255=206
-#define BOOST_THRESHOLD 50                       // R2 analog threshold (0-1023)
+#define BOOST_THRESHOLD 300                      // R2 analog threshold (0-1023) — ~30% press
 #define STICK_MAX       512
 #define DEADZONE        30
 
