@@ -1,133 +1,125 @@
-# Wiring Notes
+# Wiring Notes — The Ghost Robot
 
-## System 1 — ESP32 Drive System
-
-### Power
-- Battery 1 + Battery 2 in **series = 14.8V** → L298N 12V pin + GND
-- L298N 5V output → ESP32 VIN (powers ESP32 from motor battery)
-
-### TB6612FNG → ESP32
-```
-TB6612 PWMA  →  ESP32 GPIO 14   (Left motor PWM - LEDC channel 0)
-TB6612 AIN1  →  ESP32 GPIO 27   (Left motor forward)
-TB6612 AIN2  →  ESP32 GPIO 26   (Left motor backward)
-TB6612 BIN1  →  ESP32 GPIO 25   (Right motor forward)
-TB6612 BIN2  →  ESP32 GPIO 33   (Right motor backward)
-TB6612 PWMB  →  ESP32 GPIO 32   (Right motor PWM - LEDC channel 1)
-TB6612 STBY  →  ESP32 GPIO 13   (Standby — must be HIGH to enable motors)
-TB6612 VCC   →  ESP32 3.3V      (Logic power)
-TB6612 GND   →  Series battery (-) + ESP32 GND
-TB6612 VM    →  Series battery (+) = 14.8V (Motor power)
-```
-
-### TB6612FNG → Motors
-```
-TB6612 AO1 + AO2  →  Left motor  (25GA-370)
-TB6612 BO1 + BO2  →  Right motor (25GA-370)
-```
-Note: If motors spin wrong direction, swap AO1/AO2 or BO1/BO2 wires.
-Or set INVERT_LEFT_MOTOR / INVERT_RIGHT_MOTOR in esp32/src/main.cpp.
+Single ESP32 system. No Arduino. No IR sensor.
 
 ---
 
-## System 2 — Arduino R3 Flipper System
+## Power
 
-### Power
-- 11.1V 3S LiPo (or buck converter output set to 12V) → L298N Mini [12V] + [GND]
-- L298N Mini [5V] output → Arduino R3 VIN
-- Arduino R3 powers IR sensor from its 5V pin
+```
+[7.4V LiPo #1 (+)] ──→ [7.4V LiPo #2 (-)]   ← connect these together (series)
+[7.4V LiPo #1 (-)] ──→ GND rail              ← this is your GND
+[7.4V LiPo #2 (+)] ──→ 14.8V rail            ← this is your 14.8V
 
-### IR Sensor → Arduino R3
-```
-IR Sensor VCC  →  Arduino 5V
-IR Sensor GND  →  Arduino GND
-IR Sensor OUT  →  Arduino D3   (Hardware Interrupt INT1)
-```
-- Only one IR sensor used
-- Sensor outputs LOW when obstacle detected (default)
-- If sensor outputs HIGH on detection → set IR_ACTIVE_HIGH 1 in code
-- Adjust potentiometer on sensor for ~15cm detection range
+14.8V rail ──→ TB6612 VM         (motor power)
+14.8V rail ──→ Buck converter IN (steps down to 6V for actuator driver)
+GND rail   ──→ TB6612 GND
+GND rail   ──→ Buck converter GND
+GND rail   ──→ ESP32 GND
 
-### L298N Mini → Arduino R3
-```
-L298N Mini IN1  →  Arduino D7   (Actuator extend)
-L298N Mini IN2  →  Arduino D8   (Actuator retract)
-L298N Mini GND  →  Arduino GND + Power GND
-L298N Mini 12V  →  11.1V battery (+) or buck converter output
-```
+Buck converter OUT (6V) ──→ MX1616H VM
+Buck converter GND      ──→ MX1616H GND
 
-### L298N Mini → Linear Actuator
+ESP32 powered from USB during testing.
+For competition: use a 5V phone charger or power bank for ESP32 VIN.
 ```
-L298N Mini OUT1  →  Actuator wire 1
-L298N Mini OUT2  →  Actuator wire 2
-```
-Note: If actuator extends when it should retract → set INVERT_ACTUATOR 1 in code.
 
 ---
 
-## Full Wiring Diagram (Text)
+## ESP32 → TB6612FNG (Drive Motors)
 
 ```
-┌─────────────────────────────────────────────────────┐
-│              SYSTEM 1 — DRIVE                        │
-│                                                      │
-│  [7.4V Bat1(+)]──[7.4V Bat2(-)]  ← Series = 14.8V  │
-│  [7.4V Bat1(-)]                  ← GND              │
-│  [7.4V Bat2(+)]                  ← 14.8V (+)        │
-│                                                      │
-│  14.8V (+) ──→ TB6612 VM                            │
-│  14.8V (-) ──→ TB6612 GND ──→ ESP32 GND             │
-│  ESP32 3.3V ──→ TB6612 VCC                          │
-│  ESP32 GPIO13 ──→ TB6612 STBY (HIGH = enabled)      │
-│                                                      │
-│  ESP32 GPIO14 ──→ TB6612 PWMA                       │
-│  ESP32 GPIO27 ──→ TB6612 AIN1                       │
-│  ESP32 GPIO26 ──→ TB6612 AIN2                       │
-│  ESP32 GPIO25 ──→ TB6612 BIN1                       │
-│  ESP32 GPIO33 ──→ TB6612 BIN2                       │
-│  ESP32 GPIO32 ──→ TB6612 PWMB                       │
-│                                                      │
-│  TB6612 AO1/AO2 ──→ Left Motor                     │
-│  TB6612 BO1/BO2 ──→ Right Motor                    │
-└─────────────────────────────────────────────────────┘
+ESP32 3.3V   ──→ TB6612 VCC    (logic power)
+ESP32 GND    ──→ TB6612 GND
+ESP32 GPIO13 ──→ TB6612 STBY   (must be HIGH — if LOW, motors disabled)
+ESP32 GPIO14 ──→ TB6612 PWMA   (left motor PWM)
+ESP32 GPIO27 ──→ TB6612 AIN1   (left motor direction A)
+ESP32 GPIO26 ──→ TB6612 AIN2   (left motor direction B)
+ESP32 GPIO25 ──→ TB6612 BIN1   (right motor direction A)
+ESP32 GPIO33 ──→ TB6612 BIN2   (right motor direction B)
+ESP32 GPIO32 ──→ TB6612 PWMB   (right motor PWM)
+```
 
-┌─────────────────────────────────────────────────────┐
-│              SYSTEM 2 — FLIPPER                      │
-│                                                      │
-│  11.1V battery (or buck 12V output)                 │
-│  (+) ──→ L298N Mini [12V]                           │
-│  (-) ──→ L298N Mini [GND] ──→ Arduino GND           │
-│  L298N Mini [5V] ──→ Arduino VIN                    │
-│                                                      │
-│  IR Sensor VCC ──→ Arduino 5V                       │
-│  IR Sensor GND ──→ Arduino GND                      │
-│  IR Sensor OUT ──→ Arduino D3                       │
-│                                                      │
-│  Arduino D7 ──→ L298N Mini IN1                      │
-│  Arduino D8 ──→ L298N Mini IN2                      │
-│                                                      │
-│  L298N Mini OUT1 ──→ Actuator wire 1                │
-│  L298N Mini OUT2 ──→ Actuator wire 2                │
-└─────────────────────────────────────────────────────┘
+## TB6612FNG → Motors
 
-NOTE: System 1 and System 2 share NO connections.
-      Completely isolated power and signal lines.
+```
+TB6612 AO1 + AO2  ──→  Left motor  (25GA-370)
+TB6612 BO1 + BO2  ──→  Right motor (25GA-370)
+```
+If a motor spins wrong direction → swap AO1/AO2 or BO1/BO2 wires,
+or set `INVERT_LEFT_MOTOR 1` / `INVERT_RIGHT_MOTOR 1` in code.
+
+---
+
+## ESP32 → MX1616H (Linear Actuator)
+
+```
+ESP32 GPIO16 ──→ MX1616H IN1   (actuator extend)
+ESP32 GPIO17 ──→ MX1616H IN2   (actuator retract)
+ESP32 GND    ──→ MX1616H GND
+Buck 6V out  ──→ MX1616H VM    (motor power — max 7V, do not exceed)
+```
+
+## MX1616H → Linear Actuator
+
+```
+MX1616H OUT1  ──→  Actuator wire 1
+MX1616H OUT2  ──→  Actuator wire 2
+```
+If actuator direction is wrong → set `INVERT_ACTUATOR 1` in code.
+
+---
+
+## Full Wiring Diagram
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                   SINGLE ESP32 SYSTEM                     │
+│                                                           │
+│  [7.4V Bat1(+)]──[7.4V Bat2(-)]   ← series = 14.8V      │
+│  [7.4V Bat1(-)] = GND                                    │
+│  [7.4V Bat2(+)] = 14.8V                                  │
+│                                                           │
+│  14.8V ──→ TB6612 VM                                     │
+│  14.8V ──→ Buck converter IN                             │
+│  GND   ──→ TB6612 GND ──→ ESP32 GND ──→ MX1616H GND     │
+│                                                           │
+│  Buck OUT (6V) ──→ MX1616H VM                            │
+│                                                           │
+│  ESP32 3.3V   ──→ TB6612 VCC                             │
+│  ESP32 GPIO13 ──→ TB6612 STBY                            │
+│  ESP32 GPIO14 ──→ TB6612 PWMA                            │
+│  ESP32 GPIO27 ──→ TB6612 AIN1                            │
+│  ESP32 GPIO26 ──→ TB6612 AIN2                            │
+│  ESP32 GPIO25 ──→ TB6612 BIN1                            │
+│  ESP32 GPIO33 ──→ TB6612 BIN2                            │
+│  ESP32 GPIO32 ──→ TB6612 PWMB                            │
+│                                                           │
+│  ESP32 GPIO16 ──→ MX1616H IN1                            │
+│  ESP32 GPIO17 ──→ MX1616H IN2                            │
+│                                                           │
+│  TB6612 AO1/AO2 ──→ Left Motor                          │
+│  TB6612 BO1/BO2 ──→ Right Motor                         │
+│  MX1616H OUT1/OUT2 ──→ Linear Actuator                  │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Important Notes
 
-1. **Systems are fully isolated** — no shared GND, no shared power, no signal wires between ESP32 and Arduino.
+1. **MX1616H max voltage is 7V** — always power from buck converter, never directly from battery.
 
-2. **Series battery wiring** — connect Battery 1 (+) to Battery 2 (-). Use Battery 1 (-) as GND and Battery 2 (+) as 14.8V positive.
+2. **TB6612 STBY must be HIGH** — connected to GPIO13. If motors don't move, check this wire first.
 
-3. **IR sensor orientation** — face forward at ~30–40mm height (center height of opponent robot). Adjust potentiometer for ~15cm range.
+3. **Series battery wiring** — connect Bat1 (+) to Bat2 (-). Use Bat1 (-) as GND and Bat2 (+) as 14.8V.
 
-4. **Actuator current** — draws ~1A when running. L298N Mini rated 2A — fine.
+4. **ESP32 power for competition** — use a small USB power bank or 5V regulator from the battery into ESP32 VIN.
 
-5. **Motor current** — each JGA25-370 draws ~0.5A running, up to 2A stall. L298N rated 2A per channel — do not stall for extended time.
+5. **Motor current** — each 25GA-370 draws ~0.5A running, up to 2A stall. TB6612 rated 1.2A continuous per channel — do not stall for extended time.
 
-6. **LiPo safety** — never discharge below 3.0V per cell:
+6. **Actuator current** — draws ~1A. MX1616H rated 1.5A per channel — fine.
+
+7. **LiPo safety** — never discharge below 3.0V per cell:
    - 2S (7.4V nominal) → stop at 6.0V
-   - 3S (11.1V nominal) → stop at 9.0V
+   - Fully charged 2S = 8.4V per cell = 16.8V series
