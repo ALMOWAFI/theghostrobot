@@ -17,8 +17,8 @@ GND rail   ──→ TB6612 GND
 GND rail   ──→ Buck converter GND
 GND rail   ──→ ESP32 GND
 
-Buck converter OUT (6V) ──→ MX1616H VM
-Buck converter GND      ──→ MX1616H GND
+14.8V ──→ L298N Mini 12V pin  (L298N Mini handles up to 35V — no buck converter needed)
+Buck converter GND      ──→ L298N Mini GND
 
 ESP32 powered from USB during testing.
 For competition: use a 5V phone charger or power bank for ESP32 VIN.
@@ -51,20 +51,20 @@ or set `INVERT_LEFT_MOTOR 1` / `INVERT_RIGHT_MOTOR 1` in code.
 
 ---
 
-## ESP32 → MX1616H (Linear Actuator)
+## ESP32 → L298N Mini (Linear Actuator)
 
 ```
-ESP32 GPIO16 ──→ MX1616H IN1   (actuator extend)
-ESP32 GPIO17 ──→ MX1616H IN2   (actuator retract)
-ESP32 GND    ──→ MX1616H GND
-Buck 6V out  ──→ MX1616H VM    (motor power — max 7V, do not exceed)
+ESP32 GPIO16 ──→ L298N Mini IN1   (actuator extend)
+ESP32 GPIO17 ──→ L298N Mini IN2   (actuator retract)
+ESP32 GND    ──→ L298N Mini GND
+14.8V rail   ──→ L298N Mini 12V   (motor power — rated up to 35V)
 ```
 
-## MX1616H → Linear Actuator
+## L298N Mini → Linear Actuator
 
 ```
-MX1616H OUT1  ──→  Actuator wire 1
-MX1616H OUT2  ──→  Actuator wire 2
+L298N Mini OUT1  ──→  Actuator wire 1
+L298N Mini OUT2  ──→  Actuator wire 2
 ```
 If actuator direction is wrong → set `INVERT_ACTUATOR 1` in code.
 
@@ -82,9 +82,9 @@ If actuator direction is wrong → set `INVERT_ACTUATOR 1` in code.
 │                                                           │
 │  14.8V ──→ TB6612 VM                                     │
 │  14.8V ──→ Buck converter IN                             │
-│  GND   ──→ TB6612 GND ──→ ESP32 GND ──→ MX1616H GND     │
+│  GND   ──→ TB6612 GND ──→ ESP32 GND ──→ L298N Mini GND     │
 │                                                           │
-│  Buck OUT (6V) ──→ MX1616H VM                            │
+│  Buck OUT (6V) ──→ L298N Mini VM                            │
 │                                                           │
 │  ESP32 3.3V   ──→ TB6612 VCC                             │
 │  ESP32 GPIO13 ──→ TB6612 STBY                            │
@@ -95,12 +95,12 @@ If actuator direction is wrong → set `INVERT_ACTUATOR 1` in code.
 │  ESP32 GPIO33 ──→ TB6612 BIN2                            │
 │  ESP32 GPIO32 ──→ TB6612 PWMB                            │
 │                                                           │
-│  ESP32 GPIO16 ──→ MX1616H IN1                            │
-│  ESP32 GPIO17 ──→ MX1616H IN2                            │
+│  ESP32 GPIO16 ──→ L298N Mini IN1                            │
+│  ESP32 GPIO17 ──→ L298N Mini IN2                            │
 │                                                           │
 │  TB6612 AO1/AO2 ──→ Left Motor                          │
 │  TB6612 BO1/BO2 ──→ Right Motor                         │
-│  MX1616H OUT1/OUT2 ──→ Linear Actuator                  │
+│  L298N Mini OUT1/OUT2 ──→ Linear Actuator                  │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -108,7 +108,7 @@ If actuator direction is wrong → set `INVERT_ACTUATOR 1` in code.
 
 ## Important Notes
 
-1. **MX1616H max voltage is 7V** — always power from buck converter, never directly from battery.
+1. **L298N Mini is rated up to 35V** — connect directly to 14.8V battery. No buck converter needed.
 
 2. **TB6612 STBY must be HIGH** — connected to GPIO13. If motors don't move, check this wire first.
 
@@ -118,7 +118,7 @@ If actuator direction is wrong → set `INVERT_ACTUATOR 1` in code.
 
 5. **Motor current** — each 25GA-370 draws ~0.5A running, up to 2A stall. TB6612 rated 1.2A continuous per channel — do not stall for extended time.
 
-6. **Actuator current** — draws ~1A. MX1616H rated 1.5A per channel — fine.
+6. **Actuator current** — draws ~1A. L298N Mini rated 1.5A per channel — fine.
 
 7. **LiPo safety** — never discharge below 3.0V per cell:
    - 2S (7.4V nominal) → stop at 6.0V

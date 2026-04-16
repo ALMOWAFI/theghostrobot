@@ -2,7 +2,7 @@
  * THE GHOST ROBOT — ESP32 Drive System
  * ─────────────────────────────────────
  * Controller : Xbox via Bluetooth (Bluepad32)
- * Hardware   : TB6612FNG + 2x 25GA-370 12V 100RPM + Linear Actuator via MX1616H
+ * Hardware   : TB6612FNG (drive motors) + L298N Mini (linear actuator)
  * Battery    : 2x 7.4V LiPo in series = 14.8V
  *
  * Controls:
@@ -34,6 +34,13 @@
 // Leave 0 if unsure — safe default
 #define ENABLE_BATTERY_MONITOR  0
 
+// Competition-safe default: keep bonded controller keys.
+// Set to 1 only when you explicitly want to erase pairings and pair again.
+#define RESET_BT_KEYS_ON_BOOT    0
+
+// Set to 1 to print controller inputs to Serial for verification.
+#define INPUT_DEBUG_MODE          1
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 #include <Arduino.h>
@@ -48,7 +55,7 @@
 #define ENB_PIN     32    // PWMB — Right motor PWM  — LEDC channel 1
 #define STBY_PIN    13    // STBY — must be HIGH to enable motors (avoid GPIO12 strapping pin)
 
-// ─── Actuator Pins (MX1616H) ─────────────────────────────────────────────────
+// ─── Actuator Pins (L298N Mini) ──────────────────────────────────────────────
 #define ACT_IN1     16    // Actuator extend
 #define ACT_IN2     17    // Actuator retract
 
@@ -103,6 +110,10 @@ void onDisconnected(GamepadPtr gamepad) {
 // ─── Motor State ─────────────────────────────────────────────────────────────
 volatile int leftCurrent  = 0;
 volatile int rightCurrent = 0;
+#if INPUT_DEBUG_MODE
+static uint32_t lastInputLogMs = 0;
+static uint16_t lastButtons = 0;
+#endif
 
 // ─── Motor Output ────────────────────────────────────────────────────────────
 void IRAM_ATTR driveMotor(int ch, int pinA, int pinB, int pwm, bool invert) {
@@ -240,12 +251,38 @@ void motorTask(void* param) {
 
             // Actuator — R1 = extend, L1 = retract, neither = stop
             driveActuator(r1, l1);
+#if INPUT_DEBUG_MODE
+            // Log immediate button edge changes.
+            uint16_t changed = (uint16_t)(b ^ lastButtons);
+            if (changed & BTN_Y) {
+                Serial.println((b & BTN_Y) ? "[IN] Y pressed (turbo ON)" : "[IN] Y released (turbo OFF)");
+            }
+            if (changed & BTN_R1) {
+                Serial.println((b & BTN_R1) ? "[IN] R1 pressed (actuator EXTEND)" : "[IN] R1 released");
+            }
+            if (changed & BTN_L1) {
+                Serial.println((b & BTN_L1) ? "[IN] L1 pressed (actuator RETRACT)" : "[IN] L1 released");
+            }
+            lastButtons = b;
+
+            // Print stick snapshot at a low rate to keep logs readable.
+            uint32_t now = millis();
+            if (now - lastInputLogMs >= 250) {
+                lastInputLogMs = now;
+                int dbgLeftOut  = constrain((int)(leftCurrent  * voltageCompensation()), -MAX_PWM, MAX_PWM);
+                int dbgRightOut = constrain((int)(rightCurrent * voltageCompensation()), -MAX_PWM, MAX_PWM);
+                Serial.printf("[IN] LY=%d RX=%d | Lout=%d Rout=%d\n", ly, rx, dbgLeftOut, dbgRightOut);
+            }
+#endif
 
         } else {
             // No controller — stop everything
             leftCurrent  = leftCurrent  * 3 / 4;
             rightCurrent = rightCurrent * 3 / 4;
             driveActuator(false, false);
+#if INPUT_DEBUG_MODE
+            lastButtons = 0;
+#endif
         }
 
         float comp   = voltageCompensation();
@@ -283,7 +320,10 @@ void setup() {
 #endif
 
     BP32.setup(&onConnected, &onDisconnected);
+#if RESET_BT_KEYS_ON_BOOT
+    Serial.println("[BT] Clearing stored Bluetooth keys (re-pair required)...");
     BP32.forgetBluetoothKeys();
+#endif
 
     xTaskCreatePinnedToCore(bluetoothTask, "BT",    4096, NULL, 1, NULL, 0);
     xTaskCreatePinnedToCore(motorTask,     "Motor", 4096, NULL, 2, NULL, 1);

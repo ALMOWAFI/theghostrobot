@@ -30,7 +30,7 @@ The 3D-printed chassis is based on the open-source **Sumo Robot Combate** design
 | Size | 20x20cm |
 | Drive motors | 2x 25GA-370 12V 100RPM (~133RPM at 14.8V) |
 | Motor driver | TB6612FNG Dual H-Bridge |
-| Actuator driver | MX1616H Dual H-Bridge |
+| Actuator driver | L298N Mini Dual H-Bridge |
 | Controller | ESP32 (Bluetooth) |
 | Flipper mechanism | Linear actuator 12V 60N 25mm stroke |
 | Wheel grip | SBR solid rubber self-adhesive strips |
@@ -60,7 +60,7 @@ Xbox Controller (Bluetooth)
         |
       ESP32
       /    \
-TB6612FNG   MX1616H
+TB6612FNG   L298N Mini
   /    \        \
 Left  Right   Linear
 Motor Motor   Actuator
@@ -91,13 +91,13 @@ Motor Motor   Actuator
 | VCC | ESP32 3.3V | Logic power |
 | GND | Series battery (-) + ESP32 GND | Ground |
 
-### ESP32 + MX1616H + Linear Actuator
+### ESP32 + L298N Mini + Linear Actuator
 
-| MX1616H Pin | ESP32 GPIO | Function |
+| L298N Mini Pin | ESP32 GPIO | Function |
 |---|---|---|
 | IN1 | GPIO 16 | Actuator extend |
 | IN2 | GPIO 17 | Actuator retract |
-| VM | Buck converter 6V out | Motor power |
+| 12V | Series battery (+) = 14.8V | Motor power (rated up to 35V) |
 | GND | ESP32 GND | Ground |
 
 ---
@@ -110,7 +110,7 @@ Motor Motor   Actuator
 | Drive motors | 25GA-370 12V 100RPM | 2 |
 | Linear actuator | 12V 60N 15mm/s 25mm stroke | 1 |
 | Motor driver (drive) | TB6612FNG Dual H-Bridge | 1 |
-| Motor driver (actuator) | MX1616H Dual H-Bridge | 1 |
+| Motor driver (actuator) | L298N Mini Dual H-Bridge | 1 |
 | Batteries | 7.4V 2200mAh 50C LiPo | 2 |
 | Wheel grip | SBR solid rubber self-adhesive 1mm | 1 sheet |
 
@@ -119,7 +119,7 @@ Motor Motor   Actuator
 |---|---|
 | ESP32 | Main controller |
 | Xbox controller | Drive input via Bluetooth |
-| Buck converter | Steps 14.8V down to 6V for MX1616H |
+| Buck converter | Steps 14.8V down to 6V for L298N Mini |
 | 3D printed chassis | Modified Sumo Robot Combate design |
 
 ---
