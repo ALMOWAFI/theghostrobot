@@ -8,7 +8,8 @@
  * Controls:
  *   Left stick Y      — forward / backward
  *   Right stick X     — turn
- *   Y button          — turbo (instant full speed)
+ *   Y button          — turbo (instant acceleration, still 12V cap)
+ *   R2 (hold)         — BOOST MODE (full 14.8V — monster mode)
  *   R1 (hold)         — extend actuator
  *   L1 (hold)         — retract actuator
  *
@@ -81,7 +82,9 @@
 // Ramp: 20 steps × 2ms = 40ms to full speed — just at slip threshold
 #define RAMP_STEPS      20
 #define RAMP_MS         2
-#define MAX_PWM         255
+#define MAX_PWM         255                      // absolute ceiling (14.8V)
+#define NORMAL_MAX_PWM  206                      // 12V equivalent: (12/14.8)*255=206
+#define BOOST_THRESHOLD 50                       // R2 analog threshold (0-1023)
 #define STICK_MAX       512
 #define DEADZONE        30
 
@@ -226,6 +229,10 @@ void motorTask(void* param) {
             bool turbo  = (b & BTN_Y)  != 0;
             bool r1     = (b & BTN_R1) != 0;
             bool l1     = (b & BTN_L1) != 0;
+            bool boost  = (gp->throttle() > BOOST_THRESHOLD);  // R2 = full 14.8V
+
+            // PWM cap: normal = 12V equivalent, boost = full 14.8V
+            int pwm_cap = boost ? MAX_PWM : NORMAL_MAX_PWM;
 
             if (abs(ly) < DEADZONE) ly = 0;
             if (abs(rx) < DEADZONE) rx = 0;
@@ -234,10 +241,11 @@ void motorTask(void* param) {
             int left  = constrain(ly + rx, -STICK_MAX, STICK_MAX);
             int right = constrain(ly - rx, -STICK_MAX, STICK_MAX);
 
-            leftTarget  = map(abs(left),  0, STICK_MAX, 0, MAX_PWM) * (left  < 0 ? -1 : 1);
-            rightTarget = map(abs(right), 0, STICK_MAX, 0, MAX_PWM) * (right < 0 ? -1 : 1);
+            leftTarget  = map(abs(left),  0, STICK_MAX, 0, pwm_cap) * (left  < 0 ? -1 : 1);
+            rightTarget = map(abs(right), 0, STICK_MAX, 0, pwm_cap) * (right < 0 ? -1 : 1);
 
-            if (turbo) {
+            if (turbo || boost) {
+                // Bypass ramp — instant full power
                 leftCurrent  = leftTarget;
                 rightCurrent = rightTarget;
             } else {
@@ -256,6 +264,11 @@ void motorTask(void* param) {
             uint16_t changed = (uint16_t)(b ^ lastButtons);
             if (changed & BTN_Y) {
                 Serial.println((b & BTN_Y) ? "[IN] Y pressed (turbo ON)" : "[IN] Y released (turbo OFF)");
+            }
+            static bool lastBoost = false;
+            if (boost != lastBoost) {
+                Serial.println(boost ? "[IN] R2 pressed — BOOST MODE (14.8V)" : "[IN] R2 released — normal (12V cap)");
+                lastBoost = boost;
             }
             if (changed & BTN_R1) {
                 Serial.println((b & BTN_R1) ? "[IN] R1 pressed (actuator EXTEND)" : "[IN] R1 released");
