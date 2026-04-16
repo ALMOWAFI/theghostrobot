@@ -14,7 +14,7 @@ TB6612 AIN2  →  ESP32 GPIO 26   (Left motor backward)
 TB6612 BIN1  →  ESP32 GPIO 25   (Right motor forward)
 TB6612 BIN2  →  ESP32 GPIO 33   (Right motor backward)
 TB6612 PWMB  →  ESP32 GPIO 32   (Right motor PWM - LEDC channel 1)
-TB6612 STBY  →  ESP32 GPIO 12   (Standby — must be HIGH to enable motors)
+TB6612 STBY  →  ESP32 GPIO 13   (Standby — must be HIGH to enable motors)
 TB6612 VCC   →  ESP32 3.3V      (Logic power)
 TB6612 GND   →  Series battery (-) + ESP32 GND
 TB6612 VM    →  Series battery (+) = 14.8V (Motor power)
@@ -78,7 +78,7 @@ Note: If actuator extends when it should retract → set INVERT_ACTUATOR 1 in co
 │  14.8V (+) ──→ TB6612 VM                            │
 │  14.8V (-) ──→ TB6612 GND ──→ ESP32 GND             │
 │  ESP32 3.3V ──→ TB6612 VCC                          │
-│  ESP32 GPIO12 ──→ TB6612 STBY (HIGH = enabled)      │
+│  ESP32 GPIO13 ──→ TB6612 STBY (HIGH = enabled)      │
 │                                                      │
 │  ESP32 GPIO14 ──→ TB6612 PWMA                       │
 │  ESP32 GPIO27 ──→ TB6612 AIN1                       │

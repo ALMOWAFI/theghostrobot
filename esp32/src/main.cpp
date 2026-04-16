@@ -46,7 +46,7 @@
 #define IN3_PIN     25    // BIN1 — Right motor forward
 #define IN4_PIN     33    // BIN2 — Right motor backward
 #define ENB_PIN     32    // PWMB — Right motor PWM  — LEDC channel 1
-#define STBY_PIN    12    // STBY — must be HIGH to enable motors
+#define STBY_PIN    13    // STBY — must be HIGH to enable motors (avoid GPIO12 strapping pin)
 
 // ─── Actuator Pins (MX1616H) ─────────────────────────────────────────────────
 #define ACT_IN1     16    // Actuator extend

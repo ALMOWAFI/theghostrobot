@@ -77,7 +77,7 @@ Motor Motor   Actuator
 | BIN1 | GPIO 25 | Right motor direction A |
 | BIN2 | GPIO 33 | Right motor direction B |
 | PWMB | GPIO 32 | Right motor PWM |
-| STBY | GPIO 12 | Standby (must be HIGH) |
+| STBY | GPIO 13 | Standby (must be HIGH) |
 | VM | Series battery (+) = 14.8V | Motor power |
 | VCC | ESP32 3.3V | Logic power |
 | GND | Series battery (-) + ESP32 GND | Ground |
