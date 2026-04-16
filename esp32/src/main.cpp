@@ -9,7 +9,7 @@
  *   Left stick Y      — forward / backward
  *   Right stick X     — turn
  *   Y button          — turbo (instant acceleration)
- *   R2 (hold)         — safe mode (caps at 12V equivalent)
+ *   R2 (hold)         — BOOST MODE (full 14.8V)
  *   R1 (hold)         — extend actuator
  *   L1 (hold)         — retract actuator
  *
@@ -229,10 +229,10 @@ void motorTask(void* param) {
             bool turbo  = (b & BTN_Y)  != 0;
             bool r1     = (b & BTN_R1) != 0;
             bool l1     = (b & BTN_L1) != 0;
-            bool safe   = (gp->throttle() > BOOST_THRESHOLD);  // R2 hold = 12V cap
+            bool boost  = (gp->throttle() > BOOST_THRESHOLD);  // R2 hold = full 14.8V
 
-            // Default = full 14.8V. Hold R2 = limited to 12V equivalent.
-            int pwm_cap = safe ? NORMAL_MAX_PWM : MAX_PWM;
+            // Default = 12V safe. Hold R2 = full 14.8V monster mode.
+            int pwm_cap = boost ? MAX_PWM : NORMAL_MAX_PWM;
 
             if (abs(ly) < DEADZONE) ly = 0;
             if (abs(rx) < DEADZONE) rx = 0;
@@ -244,7 +244,7 @@ void motorTask(void* param) {
             leftTarget  = map(abs(left),  0, STICK_MAX, 0, pwm_cap) * (left  < 0 ? -1 : 1);
             rightTarget = map(abs(right), 0, STICK_MAX, 0, pwm_cap) * (right < 0 ? -1 : 1);
 
-            if (turbo || !safe) {
+            if (turbo || boost) {
                 // Bypass ramp — instant full power
                 leftCurrent  = leftTarget;
                 rightCurrent = rightTarget;
@@ -265,10 +265,10 @@ void motorTask(void* param) {
             if (changed & BTN_Y) {
                 Serial.println((b & BTN_Y) ? "[IN] Y pressed (turbo ON)" : "[IN] Y released (turbo OFF)");
             }
-            static bool lastSafe = false;
-            if (safe != lastSafe) {
-                Serial.println(safe ? "[IN] R2 held — SAFE MODE (12V cap)" : "[IN] R2 released — FULL POWER (14.8V)");
-                lastSafe = safe;
+            static bool lastBoost = false;
+            if (boost != lastBoost) {
+                Serial.println(boost ? "[IN] R2 held — BOOST (14.8V)" : "[IN] R2 released — normal (12V cap)");
+                lastBoost = boost;
             }
             if (changed & BTN_R1) {
                 Serial.println((b & BTN_R1) ? "[IN] R1 pressed (actuator EXTEND)" : "[IN] R1 released");
