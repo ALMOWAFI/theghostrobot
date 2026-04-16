@@ -31,7 +31,7 @@ The 3D-printed chassis is based on the open-source **Sumo Robot Combate** design
 | Drive motors | 2x 25GA-370 12V 100RPM (~133RPM at 14.8V) |
 | Motor driver | TB6612FNG Dual H-Bridge |
 | Main controller | ESP32 (Bluetooth) |
-| Flipper controller | Arduino R3 |
+| Flipper controller | ESP32 (same as drive) |
 | Flipper mechanism | Linear actuator 12V 60N 25mm stroke |
 | Wheel grip | SBR solid rubber self-adhesive strips |
 | Batteries | 2x 7.4V 2200mAh 50C LiPo (series = 14.8V for drive) + 11.1V 3S LiPo for flipper |
@@ -41,41 +41,27 @@ The 3D-printed chassis is based on the open-source **Sumo Robot Combate** design
 
 ## Architecture
 
-The robot runs two completely independent embedded systems:
+The robot runs on a single ESP32 system controlling both drive motors and linear actuator:
 
-### System 1 — Drive (ESP32)
+### Single System — ESP32
 ```
 Xbox Controller (Bluetooth)
         |
       ESP32
-        |
-    L298N Motor Driver
-      /         \
-Left Motor    Right Motor
-(JGA25-370)   (JGA25-370)
+      /    \
+TB6612FNG   MX1616H
+  /    \        \
+Left  Right   Linear
+Motor Motor   Actuator
 ```
 - 100% manual control via Xbox controller
-- FreeRTOS dual-core: Core 0 handles Bluetooth, Core 1 handles motor control
+- FreeRTOS dual-core: Core 0 handles Bluetooth, Core 1 handles motors + actuator
 - 20kHz PWM via ESP32 LEDC hardware
 - Physics-based acceleration ramp (no wheel slip)
 - Battery voltage compensation (consistent speed through full match)
-- Turbo button: Xbox Y button → 100% boost mode
-
-### System 2 — Flipper (Arduino R3)
-```
-IR Sensor (center)
-       |
-   Arduino R3
-       |
-L298N Mini Motor Driver
-       |
-Linear Actuator (wedge)
-```
-- 100% autonomous — no connection to ESP32
-- Hardware interrupt on IR sensor D3 (INT1) — ~1 microsecond reaction time
-- Pre-extends wedge at match start
-- Fires actuator on detection, auto-retracts after push with cooldown timer
-- AVR assembly actuator trigger (187ns at 16MHz)
+- Y button → turbo (instant full speed)
+- R1 (hold) → extend actuator
+- L1 (hold) → retract actuator
 
 ---
 
@@ -96,17 +82,14 @@ Linear Actuator (wedge)
 | VCC | ESP32 3.3V | Logic power |
 | GND | Series battery (-) + ESP32 GND | Ground |
 
-### System 2 — Arduino R3 + IR Sensor + Linear Actuator
+### ESP32 + MX1616H + Linear Actuator
 
-| Component | Arduino Pin | Function |
+| MX1616H Pin | ESP32 GPIO | Function |
 |---|---|---|
-| IR Sensor | D3 | Hardware interrupt (INT1) |
-| Actuator IN1 | D7 | Actuator extend |
-| Actuator IN2 | D8 | Actuator retract |
-| IR Sensor VCC | 5V | Power |
-| IR Sensor GND | GND | Ground |
-| Actuator Driver 12V | 11.1V 3S LiPo (+) | Power |
-| Actuator Driver GND | 11.1V 3S LiPo (-) + Arduino GND | Ground |
+| IN1 | GPIO 16 | Actuator extend |
+| IN2 | GPIO 17 | Actuator retract |
+| VM | Buck converter 6V out | Motor power |
+| GND | ESP32 GND | Ground |
 
 ---
 
@@ -151,12 +134,10 @@ Linear Actuator (wedge)
 5. **Turbo mode** — Xbox Y button bypasses ramp and goes to 100% PWM instantly.
 6. **Tank drive mixing** — Left stick Y = forward/back, Right stick X = turning.
 
-#### Arduino R3
-1. **Hardware interrupt** — Single IR sensor on INT1 (D3). Reaction time ~1 microsecond.
-2. **AVR assembly ISR** — Actuator trigger written in AVR assembly. Executes in 3 clock cycles (187ns at 16MHz).
-3. **IR logic** — Detection → extend actuator. No detection + extended → retract.
-4. **Startup sequence** — 5 second delay, then pre-extend actuator.
-5. **Cooldown timer** — 2.5 second cooldown between actuator triggers to prevent jamming.
+#### Actuator (ESP32)
+1. **R1 button (hold)** — extend actuator via MX1616H.
+2. **L1 button (hold)** — retract actuator via MX1616H.
+3. **Release** — actuator stops immediately.
 
 ### Priority Order (Both Systems)
 ```

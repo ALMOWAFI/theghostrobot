@@ -2,15 +2,22 @@
  * THE GHOST ROBOT — ESP32 Drive System
  * ─────────────────────────────────────
  * Controller : Xbox via Bluetooth (Bluepad32)
- * Hardware   : TB6612FNG + 2x 25GA-370 12V 100RPM
- * Battery    : 7.4V 2200mAh LiPo
+ * Hardware   : TB6612FNG + 2x 25GA-370 12V 100RPM + Linear Actuator via MX1616H
+ * Battery    : 2x 7.4V LiPo in series = 14.8V
+ *
+ * Controls:
+ *   Left stick Y      — forward / backward
+ *   Right stick X     — turn
+ *   Y button          — turbo (instant full speed)
+ *   R1 (hold)         — extend actuator
+ *   L1 (hold)         — retract actuator
  *
  * ─── CONFIGURATION ───────────────────────────────────────────────────────────
  * Edit the flags below before uploading.
  * No need to touch anything else.
  */
 
-// Set to 1 to run motor test on boot (verifies wiring before fighting)
+// Set to 1 to run motor + actuator test on boot
 #define TEST_MODE               0
 
 // Set to 1 if left motor spins the wrong direction
@@ -18,6 +25,9 @@
 
 // Set to 1 if right motor spins the wrong direction
 #define INVERT_RIGHT_MOTOR      0
+
+// Set to 1 if actuator extends when it should retract
+#define INVERT_ACTUATOR         0
 
 // Set to 1 only if you have built the voltage divider circuit on GPIO 34
 // (100kΩ from battery+ to GPIO34, 47kΩ from GPIO34 to GND)
@@ -37,6 +47,15 @@
 #define IN4_PIN     33    // BIN2 — Right motor backward
 #define ENB_PIN     32    // PWMB — Right motor PWM  — LEDC channel 1
 #define STBY_PIN    12    // STBY — must be HIGH to enable motors
+
+// ─── Actuator Pins (MX1616H) ─────────────────────────────────────────────────
+#define ACT_IN1     16    // Actuator extend
+#define ACT_IN2     17    // Actuator retract
+
+// ─── Xbox Button Masks ───────────────────────────────────────────────────────
+#define BTN_Y       0x0008
+#define BTN_L1      0x0010
+#define BTN_R1      0x0020
 
 // ─── Battery Monitor (only used if ENABLE_BATTERY_MONITOR = 1) ───────────────
 #define BATT_PIN        34
@@ -62,10 +81,8 @@
 // ─── LEDC Compatibility (ESP32 Arduino Core v2.x vs v3.x) ───────────────────
 void setupLEDC(uint8_t channel, uint32_t freq, uint8_t res, uint8_t pin) {
 #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
-    // Core v3.x API
     ledcAttachChannel(pin, freq, res, channel);
 #else
-    // Core v2.x API
     ledcSetup(channel, freq, res);
     ledcAttachPin(pin, channel);
 #endif
@@ -104,6 +121,23 @@ void IRAM_ATTR driveMotor(int ch, int pinA, int pinB, int pwm, bool invert) {
     ledcWrite(ch, constrain(pwm, 0, MAX_PWM));
 }
 
+// ─── Actuator Output ─────────────────────────────────────────────────────────
+void driveActuator(bool extend, bool retract) {
+#if INVERT_ACTUATOR
+    bool tmp = extend; extend = retract; retract = tmp;
+#endif
+    if (extend) {
+        digitalWrite(ACT_IN1, HIGH);
+        digitalWrite(ACT_IN2, LOW);
+    } else if (retract) {
+        digitalWrite(ACT_IN1, LOW);
+        digitalWrite(ACT_IN2, HIGH);
+    } else {
+        digitalWrite(ACT_IN1, LOW);
+        digitalWrite(ACT_IN2, LOW);
+    }
+}
+
 // ─── Battery Compensation ────────────────────────────────────────────────────
 float voltageCompensation() {
 #if ENABLE_BATTERY_MONITOR
@@ -112,14 +146,13 @@ float voltageCompensation() {
     v = constrain(v, BATT_EMPTY_V, BATT_FULL_V);
     return BATT_FULL_V / v;
 #else
-    return 1.0f;  // Disabled — no scaling applied
+    return 1.0f;
 #endif
 }
 
 // ─── Test Mode ───────────────────────────────────────────────────────────────
 #if TEST_MODE
 void runTestMode() {
-    Serial.println("[TEST] Starting motor test...");
     Serial.println("[TEST] Left motor FORWARD 1s");
     driveMotor(LEDC_CH_L, IN1_PIN, IN2_PIN, 180, INVERT_LEFT_MOTOR);
     delay(1000);
@@ -142,9 +175,21 @@ void runTestMode() {
     driveMotor(LEDC_CH_R, IN3_PIN, IN4_PIN, -180, INVERT_RIGHT_MOTOR);
     delay(1000);
     driveMotor(LEDC_CH_R, IN3_PIN, IN4_PIN, 0, false);
+    delay(500);
 
-    Serial.println("[TEST] Done. If any motor spun wrong direction,");
-    Serial.println("[TEST] set INVERT_LEFT_MOTOR or INVERT_RIGHT_MOTOR to 1.");
+    Serial.println("[TEST] Actuator EXTEND 1s");
+    driveActuator(true, false);
+    delay(1000);
+    driveActuator(false, false);
+    delay(500);
+
+    Serial.println("[TEST] Actuator RETRACT 1s");
+    driveActuator(false, true);
+    delay(1000);
+    driveActuator(false, false);
+
+    Serial.println("[TEST] Done. If any motor/actuator wrong direction,");
+    Serial.println("[TEST] set INVERT_LEFT_MOTOR / INVERT_RIGHT_MOTOR / INVERT_ACTUATOR to 1.");
 }
 #endif
 
@@ -156,7 +201,7 @@ void bluetoothTask(void* param) {
     }
 }
 
-// ─── Core 1: Motor Control Task ──────────────────────────────────────────────
+// ─── Core 1: Motor + Actuator Control Task ───────────────────────────────────
 void motorTask(void* param) {
     TickType_t lastWake = xTaskGetTickCount();
 
@@ -164,9 +209,12 @@ void motorTask(void* param) {
         int leftTarget = 0, rightTarget = 0;
 
         if (gp && gp->isConnected()) {
-            int ly    = -gp->axisY();          // Left stick Y (forward = positive)
-            int rx    =  gp->axisRX();          // Right stick X
-            bool turbo = (gp->buttons() & 0x0008) != 0;  // Y button bitmask
+            int ly     = -gp->axisY();
+            int rx     =  gp->axisRX();
+            uint16_t b =  gp->buttons();
+            bool turbo  = (b & BTN_Y)  != 0;
+            bool r1     = (b & BTN_R1) != 0;
+            bool l1     = (b & BTN_L1) != 0;
 
             if (abs(ly) < DEADZONE) ly = 0;
             if (abs(rx) < DEADZONE) rx = 0;
@@ -179,22 +227,25 @@ void motorTask(void* param) {
             rightTarget = map(abs(right), 0, STICK_MAX, 0, MAX_PWM) * (right < 0 ? -1 : 1);
 
             if (turbo) {
-                // Bypass ramp — instant full power
                 leftCurrent  = leftTarget;
                 rightCurrent = rightTarget;
             } else {
-                // Physics-based ramp
                 int lStep = (leftTarget  - leftCurrent)  / RAMP_STEPS;
                 int rStep = (rightTarget - rightCurrent) / RAMP_STEPS;
-                if (lStep == 0 && leftTarget  != leftCurrent)  lStep  = (leftTarget  > leftCurrent)  ? 1 : -1;
-                if (rStep == 0 && rightTarget != rightCurrent) rStep  = (rightTarget > rightCurrent) ? 1 : -1;
+                if (lStep == 0 && leftTarget  != leftCurrent)  lStep = (leftTarget  > leftCurrent)  ? 1 : -1;
+                if (rStep == 0 && rightTarget != rightCurrent) rStep = (rightTarget > rightCurrent) ? 1 : -1;
                 leftCurrent  += lStep;
                 rightCurrent += rStep;
             }
+
+            // Actuator — R1 = extend, L1 = retract, neither = stop
+            driveActuator(r1, l1);
+
         } else {
-            // No controller — coast to stop
+            // No controller — stop everything
             leftCurrent  = leftCurrent  * 3 / 4;
             rightCurrent = rightCurrent * 3 / 4;
+            driveActuator(false, false);
         }
 
         float comp   = voltageCompensation();
@@ -215,7 +266,10 @@ void setup() {
 
     pinMode(IN1_PIN, OUTPUT); pinMode(IN2_PIN, OUTPUT);
     pinMode(IN3_PIN, OUTPUT); pinMode(IN4_PIN, OUTPUT);
-    pinMode(STBY_PIN, OUTPUT); digitalWrite(STBY_PIN, HIGH);  // Enable TB6612FNG
+    pinMode(STBY_PIN, OUTPUT); digitalWrite(STBY_PIN, HIGH);
+
+    pinMode(ACT_IN1, OUTPUT); pinMode(ACT_IN2, OUTPUT);
+    driveActuator(false, false);
 
     setupLEDC(LEDC_CH_L, PWM_FREQ, PWM_RES, ENA_PIN);
     setupLEDC(LEDC_CH_R, PWM_FREQ, PWM_RES, ENB_PIN);
