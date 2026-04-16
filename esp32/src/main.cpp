@@ -9,7 +9,7 @@
  *   Left stick Y      — forward / backward
  *   Right stick X     — turn
  *   Y button          — turbo (instant acceleration)
- *   R2 (hold)         — BOOST MODE (full 14.8V)
+ *   R2 (hold)         — BOOST MODE (full battery voltage)
  *   R1 (hold)         — extend actuator
  *   L1 (hold)         — retract actuator
  *
@@ -37,7 +37,7 @@
 
 // Competition-safe default: keep bonded controller keys.
 // Set to 1 only when you explicitly want to erase pairings and pair again.
-#define RESET_BT_KEYS_ON_BOOT    1
+#define RESET_BT_KEYS_ON_BOOT    0
 
 // Set to 1 to print controller inputs to Serial for verification.
 #define INPUT_DEBUG_MODE          1
@@ -267,7 +267,7 @@ void motorTask(void* param) {
             }
             static bool lastBoost = false;
             if (boost != lastBoost) {
-                Serial.println(boost ? "[IN] R2 held — BOOST (14.8V)" : "[IN] R2 released — normal (12V cap)");
+                Serial.println(boost ? "[IN] R2 held — BOOST (full battery voltage)" : "[IN] R2 released — normal (12V cap)");
                 lastBoost = boost;
             }
             if (changed & BTN_R1) {
