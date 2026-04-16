@@ -2,7 +2,7 @@
  * THE GHOST ROBOT — ESP32 Drive System
  * ─────────────────────────────────────
  * Controller : Xbox via Bluetooth (Bluepad32)
- * Hardware   : L298N + 2x JGA25-370 12V 133RPM
+ * Hardware   : L298N + 2x 25GA-370 12V 100RPM
  * Battery    : 7.4V 2200mAh LiPo
  *
  * ─── CONFIGURATION ───────────────────────────────────────────────────────────
@@ -44,7 +44,7 @@
 #define BATT_DIVIDER    (147.0f / 47.0f)  // (R1+R2)/R2 with 100k/47k divider
 
 // ─── LEDC PWM ────────────────────────────────────────────────────────────────
-#define PWM_FREQ        20000   // 20kHz — optimal for L298N + JGA25-370
+#define PWM_FREQ        20000   // 20kHz — optimal for L298N + 25GA-370
 #define PWM_RES         8       // 8-bit (0–255)
 #define LEDC_CH_L       0
 #define LEDC_CH_R       1

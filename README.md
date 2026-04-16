@@ -28,7 +28,7 @@ The 3D-printed chassis is based on the open-source **Sumo Robot Combate** design
 | Weight (printed parts) | 300g |
 | Total estimated weight | ~838g |
 | Size | 20x20cm |
-| Drive motors | 2x JGA25-370 12V 133RPM |
+| Drive motors | 2x 25GA-370 12V 100RPM (~133RPM at 14.8V) |
 | Motor driver | L298N Dual H-Bridge |
 | Main controller | ESP32 (Bluetooth) |
 | Flipper controller | Arduino R3 |
@@ -113,7 +113,7 @@ Linear Actuator (wedge)
 ### Purchased
 | Component | Spec | Qty |
 |---|---|---|
-| Drive motors | JGA25-370 12V 133RPM | 2 |
+| Drive motors | 25GA-370 12V 100RPM | 2 |
 | Linear actuator | 12V 60N 15mm/s 25mm stroke | 1 |
 | Motor driver (drive) | L298N Dual H-Bridge | 1 |
 | Motor driver (actuator) | L298N Mini | 1 |
