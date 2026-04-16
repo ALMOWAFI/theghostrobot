@@ -37,7 +37,7 @@
 
 // Competition-safe default: keep bonded controller keys.
 // Set to 1 only when you explicitly want to erase pairings and pair again.
-#define RESET_BT_KEYS_ON_BOOT    0
+#define RESET_BT_KEYS_ON_BOOT    1
 
 // Set to 1 to print controller inputs to Serial for verification.
 #define INPUT_DEBUG_MODE          1
